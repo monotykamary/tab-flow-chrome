@@ -144,7 +144,8 @@
     @apply bg-background text-foreground;
     font-family: 'IBM Plex Mono', monospace;
     width: 400px;
-    min-height: 500px;
+    min-height: 600px;
+    max-height: 800px;
   }
 }
 
