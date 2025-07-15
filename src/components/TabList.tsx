@@ -294,28 +294,30 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                           color: savedGroup.color
                         })
                         
-                        // Save the new group immediately to maintain the connection
-                        const workspace: Workspace = {
-                          id: savedWorkspace.id,
-                          name: savedWorkspace.name,
-                          groups: [{
-                            id: `g_${newGroupId}`,
-                            name: savedGroup.name,
-                            color: savedGroup.color,
-                            collapsed: false,
-                            tabs: tabIds.map(t => t.id!),
-                            createdAt: savedGroup.createdAt,
+                        // Wait for tabs to load, then update the saved group with new IDs
+                        setTimeout(async () => {
+                          // Get the updated tabs with proper titles
+                          const updatedTabs = await chrome.tabs.query({ groupId: newGroupId })
+                          
+                          // Update the workspace with the new group ID
+                          const updatedWorkspace: Workspace = {
+                            ...savedWorkspace,
+                            groups: [{
+                              ...savedGroup,
+                              id: `g_${newGroupId}`,
+                              tabs: updatedTabs.map(t => t.id!),
+                              updatedAt: Date.now()
+                            }],
+                            tabs: updatedTabs,
                             updatedAt: Date.now()
-                          }],
-                          tabs: tabIds.map((t, idx) => ({ ...savedTabs[idx], id: t.id })),
-                          createdAt: savedWorkspace.createdAt,
-                          updatedAt: Date.now()
-                        }
-                        await storage.saveWorkspace(workspace)
+                          }
+                          
+                          await storage.saveWorkspace(updatedWorkspace)
+                          await loadSavedGroups()
+                          onUpdate()
+                        }, 1500)
                       }
                     }
-                    
-                    onUpdate()
                   }}
                   className="p-1.5 rounded hover:bg-black/20 transition-colors"
                   aria-label="Restore group"
