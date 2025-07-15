@@ -24,7 +24,11 @@ A powerful Chrome extension for managing tabs with workflow automation, dark the
     </td>
   </tr>
   <tr>
-    <td align="center" colspan="2">
+    <td align="center">
+      <img src="screenshots/tabflow4.png" alt="Tab Flow Automations" width="400"/><br/>
+      <sub><b>Automation Rules</b></sub>
+    </td>
+    <td align="center">
       <img src="screenshots/tabflow3.png" alt="Tab Flow Settings" width="400"/><br/>
       <sub><b>Settings & Configuration</b></sub>
     </td>
