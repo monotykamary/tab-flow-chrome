@@ -90,7 +90,20 @@ export function PopupApp() {
   }, [searchQuery])
 
   async function handleSearchEnter() {
-    if (!searchQuery.trim()) return
+    // Secret feature: if search is empty, switch to last tab
+    if (!searchQuery.trim()) {
+      try {
+        const response = await chrome.runtime.sendMessage({ action: 'getPreviousTab' })
+        if (response?.previousTabId) {
+          await chrome.tabs.update(response.previousTabId, { active: true })
+          window.close()
+          return
+        }
+      } catch (error) {
+        console.error('Failed to get previous tab:', error)
+      }
+      return
+    }
     
     // Use selected tab if available, otherwise use first match
     const targetTab = selectedIndex >= 0 && selectedIndex < filteredTabs.length

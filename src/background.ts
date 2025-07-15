@@ -5,6 +5,7 @@ import type { TabInfo, TabRule, RuleCondition, RuleAction } from './types'
 const tabLastAccessed = new Map<number, number>()
 const tabTimeSpent = new Map<number, number>()
 let activeTabId: number | null = null
+let previousTabId: number | null = null
 let lastActiveTime = Date.now()
 
 // Initialize on install/update
@@ -48,6 +49,7 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   if (activeTabId !== null) {
     const timeSpent = Date.now() - lastActiveTime
     tabTimeSpent.set(activeTabId, (tabTimeSpent.get(activeTabId) || 0) + timeSpent)
+    previousTabId = activeTabId
   }
 
   activeTabId = activeInfo.tabId
@@ -411,6 +413,14 @@ async function updateDailyStats(type: 'opened' | 'closed') {
   
   await chrome.storage.local.set({ dailyStats: stats })
 }
+
+// Message handler for getting previous tab
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getPreviousTab') {
+    sendResponse({ previousTabId })
+    return true
+  }
+})
 
 
 export {}
