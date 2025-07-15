@@ -34,8 +34,12 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   // Load saved groups and sync collapsed state with Chrome
   useEffect(() => {
     loadSavedGroups()
+  }, [])
+  
+  // Sync collapsed state when groups or saved groups change
+  useEffect(() => {
     syncCollapsedState()
-  }, [groups])
+  }, [groups, savedGroupsData])
 
   // Close color picker when clicking outside
   useEffect(() => {
@@ -76,6 +80,18 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
         collapsed.add(group.id)
       }
     })
+    
+    // Also add saved groups that are closed (not in Chrome) as collapsed by default
+    savedGroupsData.forEach(workspace => {
+      workspace.groups.forEach(savedGroup => {
+        const groupId = parseInt(savedGroup.id.replace('g_', ''))
+        if (!isNaN(groupId) && !groups.find(g => g.id === groupId)) {
+          // This saved group is not open in Chrome, so collapse it by default
+          collapsed.add(groupId)
+        }
+      })
+    })
+    
     setCollapsedGroups(collapsed)
   }
 
