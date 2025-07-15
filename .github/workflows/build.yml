@@ -1,0 +1,59 @@
+name: Build Extension
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test --if-present
+    
+    - name: Build extension
+      run: npm run build
+    
+    - name: Create artifacts
+      run: |
+        # Create ZIP for Chrome Web Store
+        cd dist
+        zip -r ../tab-flow-extension.zip .
+        cd ..
+        
+        # Create source archive
+        zip -r tab-flow-source.zip . \
+          -x "node_modules/*" \
+          -x "dist/*" \
+          -x ".git/*" \
+          -x "*.zip"
+    
+    - name: Upload extension ZIP
+      uses: actions/upload-artifact@v4
+      with:
+        name: tab-flow-extension
+        path: tab-flow-extension.zip
+        retention-days: 30
+    
+    - name: Upload source ZIP
+      uses: actions/upload-artifact@v4
+      with:
+        name: tab-flow-source
+        path: tab-flow-source.zip
+        retention-days: 30

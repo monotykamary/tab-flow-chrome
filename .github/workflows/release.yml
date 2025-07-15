@@ -1,0 +1,93 @@
+name: Build and Release Extension
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build extension
+      run: npm run build
+    
+    - name: Create ZIP file
+      run: |
+        cd dist
+        zip -r ../tab-flow-${{ github.event.release.tag_name }}.zip .
+        cd ..
+    
+    - name: Generate CRX file
+      run: |
+        # Install Chrome
+        wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google.list'
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+        # Pack extension to CRX
+        google-chrome --pack-extension=./dist --pack-extension-key=./key.pem || true
+        
+        # If no key exists, Chrome creates one - pack again with the new key
+        if [ ! -f "dist.crx" ]; then
+          google-chrome --pack-extension=./dist --pack-extension-key=./dist.pem
+          mv dist.pem key.pem
+        fi
+        
+        # Rename CRX file
+        mv dist.crx tab-flow-${{ github.event.release.tag_name }}.crx
+    
+    - name: Upload ZIP to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./tab-flow-${{ github.event.release.tag_name }}.zip
+        asset_name: tab-flow-${{ github.event.release.tag_name }}.zip
+        asset_content_type: application/zip
+    
+    - name: Upload CRX to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./tab-flow-${{ github.event.release.tag_name }}.crx
+        asset_name: tab-flow-${{ github.event.release.tag_name }}.crx
+        asset_content_type: application/x-chrome-extension
+    
+    - name: Upload Source Code
+      run: |
+        # Create source code archive excluding node_modules and dist
+        zip -r tab-flow-source-${{ github.event.release.tag_name }}.zip . \
+          -x "node_modules/*" \
+          -x "dist/*" \
+          -x ".git/*" \
+          -x "*.zip" \
+          -x "*.crx" \
+          -x "key.pem"
+    
+    - name: Upload Source to Release
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./tab-flow-source-${{ github.event.release.tag_name }}.zip
+        asset_name: tab-flow-source-${{ github.event.release.tag_name }}.zip
+        asset_content_type: application/zip

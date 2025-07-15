@@ -12,7 +12,9 @@
     "generate-icons": "node scripts/generate-icons.js",
     "preview": "vite preview",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "package": "./scripts/package.sh",
+    "zip": "cd dist && zip -r ../tab-flow-extension.zip . && cd .."
   },
   "devDependencies": {
     "@types/chrome": "^0.0.260",
