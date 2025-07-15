@@ -7,10 +7,39 @@ const tabTimeSpent = new Map<number, number>()
 let activeTabId: number | null = null
 let lastActiveTime = Date.now()
 
-// Initialize
+// Initialize on install/update
 chrome.runtime.onInstalled.addListener(() => {
   console.log('Tab Flow extension installed')
-  setupAlarms()
+  initializeExtension()
+})
+
+// Initialize on startup (when Chrome starts or extension is re-enabled)
+chrome.runtime.onStartup.addListener(() => {
+  console.log('Tab Flow extension started')
+  initializeExtension()
+})
+
+// Also initialize immediately when background script loads
+// This helps during development when reloading the extension
+initializeExtension().catch(console.error)
+
+// Initialize automations
+async function initializeExtension() {
+  await setupAlarms()
+  
+  // Also check if we need to run any immediate tasks
+  const settings = await storage.getSettings()
+  if (settings.autoArchiveEnabled) {
+    console.log('Auto-archive is enabled, checking for inactive tabs...')
+  }
+}
+
+// Listen for settings changes to update alarms
+chrome.storage.onChanged.addListener(async (changes, namespace) => {
+  if (namespace === 'sync' && changes.settings) {
+    console.log('Settings changed, updating alarms...')
+    await setupAlarms()
+  }
 })
 
 // Track tab activity
@@ -54,10 +83,15 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 // Setup alarms for scheduled tasks
 async function setupAlarms() {
   const settings = await storage.getSettings()
+  
+  // Clear all existing alarms first to avoid duplicates
+  await chrome.alarms.clearAll()
+  console.log('Cleared all existing alarms')
 
   // Auto-archive alarm
   if (settings.autoArchiveEnabled) {
     chrome.alarms.create('autoArchive', { periodInMinutes: 5 })
+    console.log('Created auto-archive alarm (every 5 minutes)')
   }
 
   // Daily cleanup alarm
@@ -76,11 +110,13 @@ async function setupAlarms() {
       delayInMinutes,
       periodInMinutes: 24 * 60
     })
+    console.log(`Created daily cleanup alarm for ${settings.dailyCleanupTime}`)
   }
 
   // Memory saver alarm - This only suspends tabs, doesn't archive them
   if (settings.memorySaverEnabled) {
     chrome.alarms.create('memorySaver', { periodInMinutes: 10 })
+    console.log('Created memory saver alarm (every 10 minutes)')
   }
 }
 
