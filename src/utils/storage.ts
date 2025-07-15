@@ -1,0 +1,97 @@
+import type { Settings, TabGroup, TabRule, Workspace } from '@/types'
+
+const STORAGE_KEYS = {
+  SETTINGS: 'settings',
+  WORKSPACES: 'workspaces',
+  ACTIVE_WORKSPACE: 'activeWorkspace',
+  TAB_RULES: 'tabRules',
+  TAB_STATS: 'tabStats',
+  ARCHIVED_TABS: 'archivedTabs',
+} as const
+
+export const storage = {
+  async getSettings(): Promise<Settings> {
+    const result = await chrome.storage.sync.get(STORAGE_KEYS.SETTINGS)
+    return result[STORAGE_KEYS.SETTINGS] || getDefaultSettings()
+  },
+
+  async setSettings(settings: Partial<Settings>): Promise<void> {
+    const current = await this.getSettings()
+    await chrome.storage.sync.set({
+      [STORAGE_KEYS.SETTINGS]: { ...current, ...settings }
+    })
+  },
+
+  async getWorkspaces(): Promise<Workspace[]> {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.WORKSPACES)
+    return result[STORAGE_KEYS.WORKSPACES] || []
+  },
+
+  async saveWorkspace(workspace: Workspace): Promise<void> {
+    const workspaces = await this.getWorkspaces()
+    const index = workspaces.findIndex(w => w.id === workspace.id)
+    
+    if (index >= 0) {
+      workspaces[index] = workspace
+    } else {
+      workspaces.push(workspace)
+    }
+    
+    await chrome.storage.local.set({ [STORAGE_KEYS.WORKSPACES]: workspaces })
+  },
+
+  async deleteWorkspace(id: string): Promise<void> {
+    const workspaces = await this.getWorkspaces()
+    const filtered = workspaces.filter(w => w.id !== id)
+    await chrome.storage.local.set({ [STORAGE_KEYS.WORKSPACES]: filtered })
+  },
+
+  async getActiveWorkspace(): Promise<string | null> {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.ACTIVE_WORKSPACE)
+    return result[STORAGE_KEYS.ACTIVE_WORKSPACE] || null
+  },
+
+  async setActiveWorkspace(id: string | null): Promise<void> {
+    await chrome.storage.local.set({ [STORAGE_KEYS.ACTIVE_WORKSPACE]: id })
+  },
+
+  async getTabRules(): Promise<TabRule[]> {
+    const result = await chrome.storage.sync.get(STORAGE_KEYS.TAB_RULES)
+    return result[STORAGE_KEYS.TAB_RULES] || []
+  },
+
+  async saveTabRule(rule: TabRule): Promise<void> {
+    const rules = await this.getTabRules()
+    const index = rules.findIndex(r => r.id === rule.id)
+    
+    if (index >= 0) {
+      rules[index] = rule
+    } else {
+      rules.push(rule)
+    }
+    
+    await chrome.storage.sync.set({ [STORAGE_KEYS.TAB_RULES]: rules })
+  },
+
+  async deleteTabRule(id: string): Promise<void> {
+    const rules = await this.getTabRules()
+    const filtered = rules.filter(r => r.id !== id)
+    await chrome.storage.sync.set({ [STORAGE_KEYS.TAB_RULES]: filtered })
+  },
+}
+
+function getDefaultSettings(): Settings {
+  return {
+    theme: 'system',
+    autoArchiveEnabled: false,
+    autoArchiveMinutes: 30,
+    duplicateDetection: true,
+    memorySaverEnabled: true,
+    memorySaverThresholdMB: 500,
+    dailyCleanupEnabled: false,
+    dailyCleanupTime: '22:00',
+    tabLimitEnabled: false,
+    tabLimitCount: 50,
+    accentColor: 'blue',
+  }
+}

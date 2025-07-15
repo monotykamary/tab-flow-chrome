@@ -1,0 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 222.2 47.4% 11.2%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+    
+    /* Chrome tab group colors - default Chrome colors */
+    --color-grey: #5f6368;
+    --color-blue: #1a73e8;
+    --color-red: #ea4335;
+    --color-yellow: #fbbc04;
+    --color-green: #34a853;
+    --color-pink: #ff6d90;
+    --color-purple: #9e5cf7;
+    --color-cyan: #00bcd4;
+    --color-orange: #ff6900;
+  }
+
+  .dark {
+    --background: 0 0% 10%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 12%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 12%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 211 100% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 20%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 65%;
+    --accent: 0 0% 20%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 20%;
+    --input: 0 0% 20%;
+    --ring: 211 100% 50%;
+  }
+
+  /* Accent color variations */
+  :root[data-accent="blue"] {
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 217 91% 60%;
+  }
+  
+  :root[data-accent="purple"] {
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 262 83% 58%;
+  }
+  
+  :root[data-accent="green"] {
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 142 71% 45%;
+  }
+  
+  :root[data-accent="orange"] {
+    --primary: 25 95% 53%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 25 95% 53%;
+  }
+  
+  :root[data-accent="pink"] {
+    --primary: 330 81% 60%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 330 81% 60%;
+  }
+  
+  :root[data-accent="red"] {
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 0 72% 51%;
+  }
+
+  /* Dark mode accent colors */
+  .dark:root[data-accent="blue"] {
+    --primary: 217 91% 60%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 217 91% 60%;
+  }
+  
+  .dark:root[data-accent="purple"] {
+    --primary: 262 83% 58%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 262 83% 58%;
+  }
+  
+  .dark:root[data-accent="green"] {
+    --primary: 142 71% 45%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 142 71% 45%;
+  }
+  
+  .dark:root[data-accent="orange"] {
+    --primary: 25 95% 53%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 25 95% 53%;
+  }
+  
+  .dark:root[data-accent="pink"] {
+    --primary: 330 81% 60%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 330 81% 60%;
+  }
+  
+  .dark:root[data-accent="red"] {
+    --primary: 0 72% 51%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 0 72% 51%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'IBM Plex Mono', monospace;
+    width: 400px;
+    min-height: 500px;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-background/60 backdrop-blur-md border border-border/40;
+  }
+  
+  .glass-hover {
+    @apply hover:bg-background/80 transition-colors;
+  }
+  
+  .dark .glass {
+    @apply bg-background/40 border-border/30;
+  }
+  
+  .dark .glass-hover {
+    @apply hover:bg-background/60;
+  }
+}
