@@ -8,9 +8,10 @@ interface SearchBarProps {
   placeholder?: string
   autoFocus?: boolean
   onEnterPress?: () => void
+  onArrowNavigation?: (direction: 'up' | 'down') => void
 }
 
-export function SearchBar({ value, onChange, placeholder = 'Search tabs...', autoFocus = false, onEnterPress }: SearchBarProps) {
+export function SearchBar({ value, onChange, placeholder = 'Search tabs...', autoFocus = false, onEnterPress, onArrowNavigation }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -24,7 +25,14 @@ export function SearchBar({ value, onChange, placeholder = 'Search tabs...', aut
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && onEnterPress) {
+      e.preventDefault()
       onEnterPress()
+    } else if (e.key === 'ArrowDown' && onArrowNavigation) {
+      e.preventDefault()
+      onArrowNavigation('down')
+    } else if (e.key === 'ArrowUp' && onArrowNavigation) {
+      e.preventDefault()
+      onArrowNavigation('up')
     }
   }
 

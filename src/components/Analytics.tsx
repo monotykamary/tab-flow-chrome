@@ -192,8 +192,11 @@ export function Analytics() {
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--popover))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: '6px'
+                    borderRadius: '6px',
+                    color: 'hsl(var(--popover-foreground))'
                   }}
+                  labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                 />
                 <Bar dataKey="value" fill="#0088FE" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -226,8 +229,11 @@ export function Analytics() {
                   contentStyle={{ 
                     backgroundColor: 'hsl(var(--popover))',
                     border: '1px solid hsl(var(--border))',
-                    borderRadius: '6px'
+                    borderRadius: '6px',
+                    color: 'hsl(var(--popover-foreground))'
                   }}
+                  labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                 />
               </PieChart>
             </ResponsiveContainer>

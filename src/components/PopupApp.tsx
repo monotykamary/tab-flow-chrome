@@ -31,6 +31,7 @@ export function PopupApp() {
   const [tabs, setTabs] = useState<chrome.tabs.Tab[]>([])
   const [groups, setGroups] = useState<chrome.tabGroups.TabGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedIndex, setSelectedIndex] = useState(-1)
 
   useEffect(() => {
     loadSettings()
@@ -72,19 +73,47 @@ export function PopupApp() {
     setSettings({ ...settings, theme: newTheme })
   }
 
-  async function handleSearchEnter() {
-    if (!searchQuery.trim()) return
+  // Calculate filtered tabs for keyboard navigation
+  const filteredTabs = React.useMemo(() => {
+    if (!searchQuery.trim()) return []
     
-    // Find the first tab that matches the search query
     const query = searchQuery.toLowerCase()
-    const firstMatch = tabs.find(tab => 
+    return tabs.filter(tab => 
       tab.title?.toLowerCase().includes(query) ||
       tab.url?.toLowerCase().includes(query)
     )
+  }, [tabs, searchQuery])
+
+  // Reset selection when search changes
+  React.useEffect(() => {
+    setSelectedIndex(-1)
+  }, [searchQuery])
+
+  async function handleSearchEnter() {
+    if (!searchQuery.trim()) return
     
-    if (firstMatch?.id) {
-      await chrome.tabs.update(firstMatch.id, { active: true })
+    // Use selected tab if available, otherwise use first match
+    const targetTab = selectedIndex >= 0 && selectedIndex < filteredTabs.length
+      ? filteredTabs[selectedIndex]
+      : filteredTabs[0]
+    
+    if (targetTab?.id) {
+      await chrome.tabs.update(targetTab.id, { active: true })
       window.close()
+    }
+  }
+
+  function handleArrowNavigation(direction: 'up' | 'down') {
+    if (filteredTabs.length === 0) return
+    
+    if (direction === 'down') {
+      setSelectedIndex(prev => 
+        prev >= filteredTabs.length - 1 ? 0 : prev + 1
+      )
+    } else {
+      setSelectedIndex(prev => 
+        prev <= 0 ? filteredTabs.length - 1 : prev - 1
+      )
     }
   }
 
@@ -96,9 +125,9 @@ export function PopupApp() {
   ] as const
 
   return (
-    <div className={cn('min-h-screen bg-background', settings?.densityMode)}>
+    <div className={cn('h-screen flex flex-col bg-background', settings?.densityMode)}>
       {/* Header */}
-      <header className="glass sticky top-0 z-50 border-b">
+      <header className="glass flex-shrink-0 border-b">
         <div className="flex items-center justify-between p-3">
           <h1 className="text-lg font-semibold">Tab Flow</h1>
           <HeaderActions 
@@ -115,6 +144,7 @@ export function PopupApp() {
             onChange={setSearchQuery} 
             autoFocus={true} 
             onEnterPress={handleSearchEnter}
+            onArrowNavigation={handleArrowNavigation}
           />
         </div>
 
@@ -138,7 +168,7 @@ export function PopupApp() {
       </header>
 
       {/* Main Content */}
-      <main className="p-3 pt-6">
+      <main className="flex-1 p-3 pt-6 overflow-y-auto">
         <AnimatePresence mode="wait">
           {currentView === 'tabs' && (
             <motion.div
@@ -153,6 +183,7 @@ export function PopupApp() {
                 groups={groups} 
                 searchQuery={searchQuery}
                 onUpdate={loadTabs}
+                selectedTabId={selectedIndex >= 0 && selectedIndex < filteredTabs.length ? filteredTabs[selectedIndex]?.id : undefined}
               />
             </motion.div>
           )}

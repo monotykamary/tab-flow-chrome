@@ -1,4 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Cross2Icon, 
@@ -19,15 +20,17 @@ interface TabListProps {
   groups: chrome.tabGroups.TabGroup[]
   searchQuery: string
   onUpdate: () => void
+  selectedTabId?: number
 }
 
-export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
+export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: TabListProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
   const [savingGroup, setSavingGroup] = useState<number | null>(null)
   const [savedGroups, setSavedGroups] = useState<Map<number, string>>(new Map())
   const [savedGroupsData, setSavedGroupsData] = useState<Workspace[]>([])
   const [colorPickerOpen, setColorPickerOpen] = useState<number | null>(null)
-
+  const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(null)
+  const colorPickerButtonRef = useRef<HTMLButtonElement>(null)
   // Load saved groups and sync collapsed state with Chrome
   useEffect(() => {
     loadSavedGroups()
@@ -40,6 +43,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
       const target = e.target as HTMLElement
       if (!target.closest('.color-picker-container')) {
         setColorPickerOpen(null)
+        setColorPickerPosition(null)
       }
     }
     
@@ -130,9 +134,6 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
   function getGroupInfo(groupId?: number) {
     if (!groupId || groupId === chrome.tabGroups.TAB_GROUP_ID_NONE) return null
     const group = groups.find(g => g.id === groupId)
-    if (group) {
-      console.log('Group color from Chrome:', group.color, 'for group:', group.title)
-    }
     return group
   }
 
@@ -381,13 +382,13 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             className={cn(
-              "rounded-lg overflow-hidden",
+              "rounded-lg",
               !group && "glass"
             )}
           >
             {group && (
               <div 
-                className="flex items-center gap-2 px-3 py-2 text-white relative"
+                className="flex items-center gap-2 px-3 py-2 text-white relative rounded-t-lg"
                 style={{ backgroundColor: `var(--color-${group.color})` }}
               >
                 <button
@@ -403,8 +404,23 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
                 
                 <div className="relative color-picker-container">
                   <button
+                    ref={colorPickerButtonRef}
                     onClick={(e) => {
                       e.stopPropagation()
+                      
+                      if (colorPickerOpen !== group.id) {
+                        // Calculate position when opening
+                        const button = e.currentTarget
+                        const rect = button.getBoundingClientRect()
+                        const spaceBelow = window.innerHeight - rect.bottom
+                        
+                        // Position below if space, otherwise above
+                        const top = spaceBelow > 200 ? rect.bottom + 4 : rect.top - 200 - 4
+                        setColorPickerPosition({ top, left: rect.left })
+                      } else {
+                        setColorPickerPosition(null)
+                      }
+                      
                       setColorPickerOpen(colorPickerOpen === group.id ? null : group.id)
                     }}
                     className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-black/20 transition-colors"
@@ -413,12 +429,19 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
                     <div className="w-3 h-3 rounded-full bg-white/30" />
                     <ChevronDownIcon className="w-3 h-3" />
                   </button>
-                  {colorPickerOpen === group.id && (
-                    <div className="absolute left-0 top-full mt-1 w-32 bg-popover border rounded-md shadow-lg z-50">
+                  {colorPickerOpen === group.id && colorPickerPosition && createPortal(
+                    <div 
+                      className="fixed w-32 bg-popover border rounded-md shadow-lg z-[9999] max-h-[200px] overflow-y-auto"
+                      style={{ top: colorPickerPosition.top, left: colorPickerPosition.left }}
+                    >
                     {tabGroupColors.map(({ color, name }) => (
                       <button
                         key={color}
-                        onClick={() => updateGroupColor(group.id, color)}
+                        onClick={() => {
+                          updateGroupColor(group.id, color)
+                          setColorPickerOpen(null)
+                          setColorPickerPosition(null)
+                        }}
                         className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-accent text-foreground text-sm"
                       >
                         <div 
@@ -428,7 +451,8 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
                         {name}
                       </button>
                     ))}
-                    </div>
+                    </div>,
+                    document.body
                   )}
                 </div>
                 
@@ -476,7 +500,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
                   className="overflow-hidden"
                 >
                   <div 
-                    className={cn("space-y-1", group ? "p-2" : "p-0")}
+                    className={cn("space-y-1", group ? "p-2" : "p-2")}
                     style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 15%, transparent)` } : undefined}
                   >
                     {groupTabs.map((tab) => (
@@ -489,7 +513,8 @@ export function TabList({ tabs, groups, searchQuery, onUpdate }: TabListProps) {
                         className={cn(
                           'group flex items-center gap-2 p-2 rounded-md',
                           'hover:bg-accent/50 cursor-pointer transition-colors',
-                          !group && 'glass glass-hover'
+                          !group && 'glass glass-hover',
+                          selectedTabId === tab.id && 'ring-2 ring-primary bg-primary/10'
                         )}
                         style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 10%, transparent)` } : undefined}
                         onClick={() => tab.id && activateTab(tab.id)}
