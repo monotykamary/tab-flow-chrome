@@ -30,7 +30,7 @@ async function initializeExtension() {
   await reconcileSavedGroups()
   
   // Also check if we need to run any immediate tasks
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (settings.autoArchiveEnabled) {
     console.log('Auto-archive is enabled, checking for inactive tabs...')
   }
@@ -75,10 +75,18 @@ async function reconcileSavedGroups() {
   }
 }
 
+// Get cached settings or load from storage
+async function getCachedSettings(): Promise<Settings> {
+  if (!cachedSettings) {
+    cachedSettings = await storage.getSettings()
+  }
+  return cachedSettings
+}
+
 // Handle auto-collapse of inactive groups
 async function handleAutoCollapseGroups(activeTabId: number) {
   try {
-    const settings = await storage.getSettings()
+    const settings = await getCachedSettings()
     if (!settings.autoCollapseGroups) return
     
     const delay = settings.autoCollapseDelay * 1000 // Convert to milliseconds
@@ -160,16 +168,23 @@ async function handleAutoCollapseGroups(activeTabId: number) {
   }
 }
 
-// Listen for settings changes to update alarms
+// Listen for settings changes to update alarms and cache
 chrome.storage.onChanged.addListener(async (changes, namespace) => {
   if (namespace === 'sync' && changes.settings) {
     console.log('Settings changed, updating alarms...')
+    cachedSettings = changes.settings.newValue
     await setupAlarms()
   }
 })
 
 // Track group collapse timeouts
 const groupCollapseTimeouts = new Map<number, NodeJS.Timeout>()
+
+// Cache settings to reduce storage calls
+let cachedSettings: Settings | null = null
+
+// Window focus debounce timer
+let windowFocusTimeout: NodeJS.Timeout | null = null
 
 // Track tab activity
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -185,15 +200,16 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   tabLastAccessed.set(activeInfo.tabId, Date.now())
   
   // Handle auto-collapse groups
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (settings.autoCollapseGroups) {
     await handleAutoCollapseGroups(activeInfo.tabId)
   }
 })
 
-// Also listen for tab highlight changes (when clicking on tabs)
+// Note: We're keeping onHighlighted because onActivated doesn't fire when clicking 
+// on an already active tab in some cases (like after window focus)
 chrome.tabs.onHighlighted.addListener(async (highlightInfo) => {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (settings.autoCollapseGroups && highlightInfo.tabIds.length > 0) {
     // Use the first highlighted tab
     await handleAutoCollapseGroups(highlightInfo.tabIds[0])
@@ -202,7 +218,7 @@ chrome.tabs.onHighlighted.addListener(async (highlightInfo) => {
 
 // Listen for tab attach events (moving tabs between windows)
 chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (settings.autoCollapseGroups) {
     // Small delay to let Chrome update the tab state
     setTimeout(async () => {
@@ -213,7 +229,7 @@ chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
 
 // Listen for tab detach events
 chrome.tabs.onDetached.addListener(async (tabId, detachInfo) => {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (settings.autoCollapseGroups) {
     // Handle auto-collapse in the old window
     const tabs = await chrome.tabs.query({ active: true, windowId: detachInfo.oldWindowId })
@@ -223,44 +239,58 @@ chrome.tabs.onDetached.addListener(async (tabId, detachInfo) => {
   }
 })
 
-// Handle window focus changes for auto-collapse
+// Handle window focus changes for auto-collapse (with debouncing)
 chrome.windows.onFocusChanged.addListener(async (windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) return
   
-  const settings = await storage.getSettings()
-  if (settings.autoCollapseGroups) {
-    // Get the active tab in the focused window
-    const tabs = await chrome.tabs.query({ active: true, windowId })
-    if (tabs.length > 0 && tabs[0].id) {
-      await handleAutoCollapseGroups(tabs[0].id)
-    }
+  // Clear any pending focus change
+  if (windowFocusTimeout) {
+    clearTimeout(windowFocusTimeout)
   }
+  
+  // Debounce rapid window focus changes
+  windowFocusTimeout = setTimeout(async () => {
+    const settings = await getCachedSettings()
+    if (settings.autoCollapseGroups) {
+      // Get the active tab in the focused window
+      const tabs = await chrome.tabs.query({ active: true, windowId })
+      if (tabs.length > 0 && tabs[0].id) {
+        await handleAutoCollapseGroups(tabs[0].id)
+      }
+    }
+    windowFocusTimeout = null
+  }, 100) // 100ms debounce
 })
 
 // Track new tabs
 chrome.tabs.onCreated.addListener(async (tab) => {
   if (tab.id) {
     tabLastAccessed.set(tab.id, Date.now())
-    await applyRules(tab)
-    await updateDailyStats('opened')
-    await enforceTabLimits()
+    // Batch async operations for better performance
+    await Promise.all([
+      applyRules(tab),
+      updateDailyStats('opened'),
+      enforceTabLimits()
+    ])
   }
 })
 
-// Track tab updates
+// Track tab updates (only specific changes we care about)
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  // Only process complete status to run rules and duplicate detection
   if (changeInfo.status === 'complete') {
     await applyRules(tab)
     await checkDuplicates(tab)
   }
   
-  // Handle group changes for auto-collapse
-  if ('groupId' in changeInfo) {
-    const settings = await storage.getSettings()
-    if (settings.autoCollapseGroups && tab.active) {
+  // Handle group changes for auto-collapse (only if active tab)
+  if ('groupId' in changeInfo && tab.active) {
+    const settings = await getCachedSettings()
+    if (settings.autoCollapseGroups) {
       await handleAutoCollapseGroups(tabId)
     }
   }
+  // Ignore other frequent updates like title, favIconUrl, etc.
 })
 
 // Track tab removal
@@ -311,7 +341,7 @@ chrome.tabGroups.onRemoved.addListener(async (group) => {
 
 // Setup alarms for scheduled tasks
 async function setupAlarms() {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   
   // Clear all existing alarms first to avoid duplicates
   await chrome.alarms.clearAll()
@@ -366,7 +396,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 // Auto-archive inactive tabs
 async function autoArchiveInactiveTabs() {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (!settings.autoArchiveEnabled) return
 
   const tabs = await chrome.tabs.query({})
@@ -496,7 +526,7 @@ async function addToGroup(tabId: number, groupName: string) {
 
 // Check for duplicate tabs
 async function checkDuplicates(tab: chrome.tabs.Tab) {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (!settings.duplicateDetection || !tab.url || !tab.id) return
 
   // Skip chrome:// URLs, new tab pages, and other special pages
@@ -553,7 +583,7 @@ async function performDailyCleanup() {
 
 // Suspend memory-heavy tabs
 async function suspendMemoryHeavyTabs() {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (!settings.memorySaverEnabled) return
 
   const tabs = await chrome.tabs.query({ active: false, pinned: false })
@@ -592,7 +622,7 @@ async function suspendMemoryHeavyTabs() {
 
 // Enforce tab limits
 async function enforceTabLimits() {
-  const settings = await storage.getSettings()
+  const settings = await getCachedSettings()
   if (!settings.tabLimitEnabled) return
 
   const tabs = await chrome.tabs.query({})
