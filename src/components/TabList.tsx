@@ -97,6 +97,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   const [colorPickerOpen, setColorPickerOpen] = useState<number | null>(null)
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(null)
   const [restoringGroups, setRestoringGroups] = useState<Set<number>>(new Set())
+  const [collapsingGroups, setCollapsingGroups] = useState<Set<number>>(new Set())
   const colorPickerButtonRef = useRef<HTMLButtonElement>(null)
   // Load saved groups and sync collapsed state with Chrome
   useEffect(() => {
@@ -283,11 +284,26 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   function toggleGroupCollapse(groupId: number) {
     const newCollapsed = new Set(collapsedGroups)
     if (newCollapsed.has(groupId)) {
+      // Expanding - change radius immediately
       newCollapsed.delete(groupId)
+      setCollapsedGroups(newCollapsed)
     } else {
+      // Collapsing - delay radius change
       newCollapsed.add(groupId)
+      setCollapsedGroups(newCollapsed)
+      
+      // Track that this group is collapsing
+      setCollapsingGroups(prev => new Set(prev).add(groupId))
+      
+      // After animation completes, remove from collapsing set
+      setTimeout(() => {
+        setCollapsingGroups(prev => {
+          const next = new Set(prev)
+          next.delete(groupId)
+          return next
+        })
+      }, 200) // Match the collapse animation duration
     }
-    setCollapsedGroups(newCollapsed)
   }
 
   async function toggleSaveGroup(groupId: number, groupName: string) {
@@ -379,7 +395,10 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
               className="rounded-lg overflow-hidden glass"
             >
               <div 
-                className="flex items-center gap-2 px-3 py-2 text-white relative"
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-white relative",
+                  isCollapsed && !collapsingGroups.has(groupId) ? "rounded-lg transition-all duration-100" : "rounded-t-lg"
+                )}
                 style={{ backgroundColor: `var(--color-${savedGroup.color})` }}
               >
                 <button
@@ -504,7 +523,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                     className="overflow-hidden"
                   >
                     <div 
-                      className="space-y-1 p-2"
+                      className="space-y-1 p-2 rounded-b-lg"
                       style={{ backgroundColor: `color-mix(in srgb, var(--color-${savedGroup.color}) 15%, transparent)` }}
                     >
                       {savedTabs.map((tab, index) => (
@@ -568,7 +587,10 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
           >
             {group && (
               <div 
-                className="flex items-center gap-2 px-3 py-2 text-white relative rounded-t-lg"
+                className={cn(
+                  "flex items-center gap-2 px-3 py-2 text-white relative",
+                  isCollapsed && !collapsingGroups.has(group.id) ? "rounded-lg transition-all duration-100" : "rounded-t-lg"
+                )}
                 style={{ backgroundColor: `var(--color-${group.color})` }}
               >
                 <button
@@ -680,7 +702,10 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                   className="overflow-hidden"
                 >
                   <div 
-                    className={cn("space-y-1", group ? "p-2" : "p-2")}
+                    className={cn(
+                      "space-y-1",
+                      group ? "p-2 rounded-b-lg" : "p-2"
+                    )}
                     style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 15%, transparent)` } : undefined}
                   >
                     {groupTabs.map((tab, tabIndex) => {
