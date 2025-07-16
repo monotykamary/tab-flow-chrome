@@ -237,20 +237,22 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
       grouped.set(normalizedGroupId, [...existing, tab])
     })
     
-    // Add saved groups that are not currently open
-    savedGroupsData.forEach(workspace => {
-      workspace.groups.forEach(group => {
-        // Check if there's an active group with the same name
-        const activeGroup = groups.find(g => g.title === group.name)
-        if (!activeGroup) {
-          // Only add if there's no active group with this name
-          const originalId = parseInt(group.id.replace('g_', ''))
-          if (!isNaN(originalId)) {
-            grouped.set(originalId, [])
+    // Add saved groups that are not currently open (only when not searching)
+    if (!searchQuery) {
+      savedGroupsData.forEach(workspace => {
+        workspace.groups.forEach(group => {
+          // Check if there's an active group with the same name
+          const activeGroup = groups.find(g => g.title === group.name)
+          if (!activeGroup) {
+            // Only add if there's no active group with this name
+            const originalId = parseInt(group.id.replace('g_', ''))
+            if (!isNaN(originalId)) {
+              grouped.set(originalId, [])
+            }
           }
-        }
+        })
       })
-    })
+    }
     
     return grouped
   }, [filteredTabs, savedGroupsData, groups])
@@ -769,9 +771,15 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
         )
       })}
       
-      {filteredTabs.length === 0 && (
+      {filteredTabs.length === 0 && searchQuery && (
         <div className="text-center py-8 text-muted-foreground">
-          <p>No tabs found</p>
+          <p>No matching tabs found</p>
+        </div>
+      )}
+      
+      {filteredTabs.length === 0 && !searchQuery && groupedTabs.size === 0 && (
+        <div className="text-center py-8 text-muted-foreground">
+          <p>No tabs open</p>
         </div>
       )}
     </div>
