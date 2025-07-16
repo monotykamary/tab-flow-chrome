@@ -30,6 +30,7 @@ export interface TabRule {
   name: string;
   enabled: boolean;
   conditions: RuleCondition[];
+  conditionOperator?: 'AND' | 'OR'; // Default to AND for backward compatibility
   actions: RuleAction[];
   createdAt: number;
 }

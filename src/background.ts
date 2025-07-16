@@ -439,34 +439,60 @@ async function applyRules(tab: chrome.tabs.Tab) {
   const enabledRules = rules.filter(r => r.enabled)
 
   for (const rule of enabledRules) {
-    if (await matchesConditions(tab, rule.conditions)) {
+    if (await matchesConditions(tab, rule.conditions, rule.conditionOperator)) {
       await executeActions(tab, rule.actions)
     }
   }
 }
 
 // Check if tab matches rule conditions
-async function matchesConditions(tab: chrome.tabs.Tab, conditions: RuleCondition[]): Promise<boolean> {
-  for (const condition of conditions) {
-    let matches = false
+async function matchesConditions(tab: chrome.tabs.Tab, conditions: RuleCondition[], operator?: 'AND' | 'OR'): Promise<boolean> {
+  // Default to AND for backward compatibility
+  const logicOperator = operator || 'AND'
+  
+  if (logicOperator === 'OR') {
+    // OR logic: at least one condition must match
+    for (const condition of conditions) {
+      let matches = false
 
-    switch (condition.type) {
-      case 'url':
-        matches = matchesPattern(tab.url || '', condition.operator, condition.value, condition.caseSensitive)
-        break
-      case 'title':
-        matches = matchesPattern(tab.title || '', condition.operator, condition.value, condition.caseSensitive)
-        break
-      case 'domain':
-        const domain = tab.url ? new URL(tab.url).hostname : ''
-        matches = matchesPattern(domain, condition.operator, condition.value, condition.caseSensitive)
-        break
+      switch (condition.type) {
+        case 'url':
+          matches = matchesPattern(tab.url || '', condition.operator, condition.value, condition.caseSensitive)
+          break
+        case 'title':
+          matches = matchesPattern(tab.title || '', condition.operator, condition.value, condition.caseSensitive)
+          break
+        case 'domain':
+          const domain = tab.url ? new URL(tab.url).hostname : ''
+          matches = matchesPattern(domain, condition.operator, condition.value, condition.caseSensitive)
+          break
+      }
+
+      if (matches) return true // Return true on first match for OR
     }
+    return false // No conditions matched
+  } else {
+    // AND logic: all conditions must match
+    for (const condition of conditions) {
+      let matches = false
 
-    if (!matches) return false
+      switch (condition.type) {
+        case 'url':
+          matches = matchesPattern(tab.url || '', condition.operator, condition.value, condition.caseSensitive)
+          break
+        case 'title':
+          matches = matchesPattern(tab.title || '', condition.operator, condition.value, condition.caseSensitive)
+          break
+        case 'domain':
+          const domain = tab.url ? new URL(tab.url).hostname : ''
+          matches = matchesPattern(domain, condition.operator, condition.value, condition.caseSensitive)
+          break
+      }
+
+      if (!matches) return false // Return false on first non-match for AND
+    }
+    return true // All conditions matched
   }
-
-  return true
 }
 
 // Pattern matching helper

@@ -96,33 +96,50 @@ export function TabRules() {
           {rules.map((rule) => (
             <motion.div
               key={rule.id}
-              layout
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, x: -10 }}
               className={cn(
-                'p-4 rounded-lg glass',
+                'p-4 rounded-lg glass transition-all duration-200',
                 !rule.enabled && 'opacity-60'
               )}
             >
-              {editingRule?.id === rule.id ? (
-                <RuleEditor
-                  rule={editingRule}
-                  onChange={setEditingRule}
-                  onSave={() => saveRule(editingRule)}
-                  onCancel={() => {
-                    setEditingRule(null)
-                    setIsCreating(false)
-                  }}
-                />
-              ) : (
-                <RuleDisplay
-                  rule={rule}
-                  onEdit={() => setEditingRule(rule)}
-                  onDelete={() => deleteRule(rule.id)}
-                  onToggle={() => toggleRule(rule)}
-                />
-              )}
+              <AnimatePresence mode="wait">
+                {editingRule?.id === rule.id ? (
+                  <motion.div
+                    key="editor"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <RuleEditor
+                      rule={editingRule}
+                      onChange={setEditingRule}
+                      onSave={() => saveRule(editingRule)}
+                      onCancel={() => {
+                        setEditingRule(null)
+                        setIsCreating(false)
+                      }}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="display"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <RuleDisplay
+                      rule={rule}
+                      onEdit={() => setEditingRule(rule)}
+                      onDelete={() => deleteRule(rule.id)}
+                      onToggle={() => toggleRule(rule)}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           ))}
 
@@ -175,7 +192,7 @@ function RuleDisplay({ rule, onEdit, onDelete, onToggle }: RuleDisplayProps) {
               <span className="font-medium">When:</span>{' '}
               {rule.conditions.map((c, i) => (
                 <span key={i}>
-                  {i > 0 && ' AND '}
+                  {i > 0 && ` ${rule.conditionOperator || 'AND'} `}
                   {c.type} {c.operator} "{c.value}"{c.caseSensitive && ' (case sensitive)'}
                 </span>
               ))}
@@ -297,9 +314,31 @@ function RuleEditor({ rule, onChange, onSave, onCancel }: RuleEditorProps) {
       {/* Conditions */}
       <div>
         <label className="text-sm font-medium mb-2 block">When tab matches:</label>
+        
+        {/* Operator selector - only show if there are multiple conditions */}
+        {rule.conditions.length > 1 && (
+          <div className="mb-3 flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Match</span>
+            <select
+              value={rule.conditionOperator || 'AND'}
+              onChange={(e) => onChange({ ...rule, conditionOperator: e.target.value as 'AND' | 'OR' })}
+              className="px-2 pr-8 py-1 rounded border bg-background text-sm"
+            >
+              <option value="AND">All conditions (AND)</option>
+              <option value="OR">Any condition (OR)</option>
+            </select>
+          </div>
+        )}
+        
         <div className="space-y-2">
           {rule.conditions.map((condition, index) => (
-            <div key={index} className="space-y-2">
+            <React.Fragment key={index}>
+              {index > 0 && (
+                <div className="text-center text-xs text-muted-foreground py-1">
+                  {rule.conditionOperator || 'AND'}
+                </div>
+              )}
+              <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <select
                   value={condition.type}
@@ -347,6 +386,7 @@ function RuleEditor({ rule, onChange, onSave, onCancel }: RuleEditorProps) {
                 </label>
               </div>
             </div>
+            </React.Fragment>
           ))}
           <button
             onClick={addCondition}
