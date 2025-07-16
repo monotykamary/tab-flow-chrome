@@ -84,10 +84,15 @@ export function PopupApp() {
     )
   }, [tabs, searchQuery])
 
-  // Reset selection when search changes
+  // Update selection when search changes
   React.useEffect(() => {
-    setSelectedIndex(-1)
-  }, [searchQuery])
+    // If we have search results, select the first one
+    if (searchQuery.trim() && filteredTabs.length > 0) {
+      setSelectedIndex(0)
+    } else {
+      setSelectedIndex(-1)
+    }
+  }, [searchQuery, filteredTabs.length])
 
   async function handleSearchEnter() {
     // Secret feature: if search is empty, switch to last tab
