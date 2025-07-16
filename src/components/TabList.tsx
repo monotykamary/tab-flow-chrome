@@ -23,6 +23,72 @@ interface TabListProps {
   selectedTabId?: number
 }
 
+// Helper function to wait for tabs to fully load
+const waitForTabsToLoad = (tabIds: number[], maxWaitMs = 10000): Promise<chrome.tabs.Tab[]> => {
+  return new Promise((resolve) => {
+    const loadingTabs = new Set(tabIds);
+    const startTime = Date.now();
+    let checkCompleteTimer: NodeJS.Timeout;
+    
+    const checkComplete = async () => {
+      // Get current tab states
+      const tabs = await Promise.all(
+        Array.from(loadingTabs).map(id => chrome.tabs.get(id))
+      );
+      
+      // Check which tabs are complete with proper titles
+      const completeTabs = tabs.filter(tab => {
+        // Consider a tab "complete" when it has a real title (not default values)
+        // and status is complete
+        return tab.status === 'complete' && 
+               tab.title && 
+               tab.title !== 'New Tab' && 
+               tab.title !== 'Untitled' &&
+               !tab.title.startsWith('chrome://');
+      });
+      
+      // Remove completed tabs from tracking
+      completeTabs.forEach(tab => loadingTabs.delete(tab.id!));
+      
+      // If all tabs are loaded or we've hit the timeout
+      if (loadingTabs.size === 0 || Date.now() - startTime > maxWaitMs) {
+        clearTimeout(checkCompleteTimer);
+        chrome.tabs.onUpdated.removeListener(updateListener);
+        
+        // Get final state of all tabs
+        const finalTabs = await Promise.all(tabIds.map(id => chrome.tabs.get(id)));
+        resolve(finalTabs);
+      }
+    };
+    
+    const updateListener = (tabId: number, changeInfo: chrome.tabs.TabChangeInfo) => {
+      if (loadingTabs.has(tabId)) {
+        // Check if this update indicates the tab might be ready
+        if (changeInfo.status === 'complete' || changeInfo.title) {
+          // Debounce the check to avoid too many calls
+          clearTimeout(checkCompleteTimer);
+          checkCompleteTimer = setTimeout(checkComplete, 100);
+        }
+      }
+    };
+    
+    // Listen for tab updates
+    chrome.tabs.onUpdated.addListener(updateListener);
+    
+    // Initial check - some tabs might already be loaded
+    checkComplete();
+    
+    // Also set up periodic checks in case we miss events
+    const pollInterval = setInterval(() => {
+      if (loadingTabs.size > 0 && Date.now() - startTime < maxWaitMs) {
+        checkComplete();
+      } else {
+        clearInterval(pollInterval);
+      }
+    }, 500);
+  });
+};
+
 export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: TabListProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
   const [savingGroup, setSavingGroup] = useState<number | null>(null)
@@ -30,6 +96,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   const [savedGroupsData, setSavedGroupsData] = useState<Workspace[]>([])
   const [colorPickerOpen, setColorPickerOpen] = useState<number | null>(null)
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(null)
+  const [restoringGroups, setRestoringGroups] = useState<Set<number>>(new Set())
   const colorPickerButtonRef = useRef<HTMLButtonElement>(null)
   // Load saved groups and sync collapsed state with Chrome
   useEffect(() => {
@@ -321,7 +388,12 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                 </button>
                 
                 <span className="text-sm font-medium flex-1">{savedGroup.name || 'Untitled Group'}</span>
-                <span className="text-xs opacity-70">(Saved - {savedTabs.length} tabs)</span>
+                <span className="text-xs opacity-70">
+                  {restoringGroups.has(groupId) 
+                    ? 'Loading tabs...' 
+                    : `(Saved - ${savedTabs.length} tabs)`
+                  }
+                </span>
                 
                 <button
                   onClick={async () => {
@@ -335,22 +407,24 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                         await chrome.tabs.update(groupTabs[0].id, { active: true })
                       }
                     } else {
-                      // Restore the group
-                      const tabIds = await Promise.all(
-                        savedTabs.map(tab => chrome.tabs.create({ url: tab.url, active: false }))
-                      )
+                      // Mark as restoring
+                      setRestoringGroups(prev => new Set(prev).add(groupId))
                       
-                      if (tabIds.length > 0 && tabIds[0].id) {
-                        const newGroupId = await chrome.tabs.group({ tabIds: tabIds.map(t => t.id!) })
-                        await chrome.tabGroups.update(newGroupId, {
-                          title: savedGroup.name,
-                          color: savedGroup.color
-                        })
+                      try {
+                        // Restore the group
+                        const tabIds = await Promise.all(
+                          savedTabs.map(tab => chrome.tabs.create({ url: tab.url, active: false }))
+                        )
                         
-                        // Wait for tabs to load, then update the saved group with new IDs
-                        setTimeout(async () => {
-                          // Get the updated tabs with proper titles
-                          const updatedTabs = await chrome.tabs.query({ groupId: newGroupId })
+                        if (tabIds.length > 0 && tabIds[0].id) {
+                          const newGroupId = await chrome.tabs.group({ tabIds: tabIds.map(t => t.id!) })
+                          await chrome.tabGroups.update(newGroupId, {
+                            title: savedGroup.name,
+                            color: savedGroup.color
+                          })
+                          
+                          // Wait for all tabs to fully load
+                          const loadedTabs = await waitForTabsToLoad(tabIds.map(t => t.id!))
                           
                           // Update the workspace with the new group ID and loaded tab info
                           const updatedWorkspace: Workspace = {
@@ -358,24 +432,32 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                             groups: [{
                               ...savedGroup,
                               id: `g_${newGroupId}`,
-                              tabs: updatedTabs.map(t => t.id!),
+                              tabs: loadedTabs.map(t => t.id!),
                               updatedAt: Date.now()
                             }],
-                            tabs: updatedTabs,
+                            tabs: loadedTabs,
                             updatedAt: Date.now()
                           }
                           
                           await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
                           await loadSavedGroups()
                           onUpdate()
-                        }, 1500)
+                        }
+                      } finally {
+                        // Remove from restoring set
+                        setRestoringGroups(prev => {
+                          const next = new Set(prev)
+                          next.delete(groupId)
+                          return next
+                        })
                       }
                     }
                   }}
-                  className="p-1.5 rounded hover:bg-black/20 transition-colors"
+                  disabled={restoringGroups.has(groupId)}
+                  className="p-1.5 rounded hover:bg-black/20 transition-colors disabled:opacity-50"
                   aria-label="Restore group"
                 >
-                  <ReloadIcon className="w-4 h-4" />
+                  <ReloadIcon className={cn("w-4 h-4", restoringGroups.has(groupId) && "animate-spin")} />
                 </button>
                 
                 <button
