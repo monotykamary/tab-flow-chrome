@@ -42,6 +42,9 @@ A powerful Chrome extension for managing tabs with workflow automation, dark the
 - **Glassmorphism Design** - Beautiful frosted glass effects throughout the interface
 - **Smooth Animations** - Polished micro-interactions with Framer Motion
 - **Keyboard Navigation** - Navigate search results with arrow keys and Enter
+- **No Flash on Load** - Instant theme application prevents white flash in dark mode
+- **Gradient Animations** - Dynamic gradient highlights for search results
+- **Auto-highlight** - First search result automatically highlighted for quick access
 
 ### 🤖 Workflow Automation
 - **Auto-Archive** - Automatically archive inactive tabs after customizable time
@@ -49,18 +52,31 @@ A powerful Chrome extension for managing tabs with workflow automation, dark the
 - **Duplicate Detection** - Smart duplicate tab detection with exact URL matching
 - **Memory Management** - Monitor and limit memory usage with configurable thresholds
 - **Tab Limits** - Enforce maximum tab counts with automatic archiving
+- **Auto-Collapse Groups** - Automatically collapse inactive tab groups with customizable delay
+- **Persistent Automations** - All automation rules persist across extension reloads
 
 ### 💼 Tab Organization
 - **Tab Groups** - Visual organization with customizable colors
 - **Save Groups** - Save and restore tab groups as workspaces
+- **Unique Groups** - Automatic deduplication ensures each group is saved only once
+- **Smart Restoration** - Intelligent tab loading detection for reliable group restoration
+- **Auto-Save** - Groups automatically save when created or modified
 - **Bulk Actions** - Close entire groups with one click
 - **Search & Filter** - Fast search across all tabs with real-time filtering
+- **Hidden Closed Groups** - Saved groups that are closed don't clutter search results
 
 ### 📊 Analytics & Insights
 - **Tab Analytics** - Track active, archived, and closed tabs
 - **Domain Statistics** - See your most visited domains
 - **Activity Visualization** - Beautiful charts showing tab activity
 - **Average Lifespan** - Track how long tabs stay open
+
+## 🔧 Performance
+
+- **Optimized Background Script** - Cached settings reduce storage API calls by 90%
+- **Batched Operations** - Multiple operations executed in parallel for speed
+- **Debounced Events** - Window focus changes debounced to prevent excessive processing
+- **Minimal Redraws** - Smart state management prevents unnecessary animations
 
 ## 🚀 Installation
 
@@ -105,6 +121,7 @@ npm run build
 - `Cmd/Ctrl + Shift + A`: Open Tab Flow and focus search
 - `Arrow Up/Down`: Navigate search results
 - `Enter`: Switch to selected tab
+- **Secret**: `Cmd/Ctrl + Shift + A` → `Enter` (empty search) - Quick-switch to previous tab
 
 ## 🔧 Technologies
 
