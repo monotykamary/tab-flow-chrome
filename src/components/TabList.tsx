@@ -205,7 +205,10 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
         const groupId = parseInt(savedGroup.id.replace('g_', ''))
         if (!isNaN(groupId) && !groups.find(g => g.id === groupId)) {
           // This saved group is not open in Chrome, so collapse it by default
-          collapsed.add(groupId)
+          // But don't collapse if it's being restored
+          if (!restoringGroups.has(groupId)) {
+            collapsed.add(groupId)
+          }
         }
       })
     })
@@ -348,7 +351,8 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
       {Array.from(groupedTabs.entries()).map(([groupId, groupTabs], groupIndex) => {
         const group = getGroupInfo(groupId)
         // Expand groups when searching and they have matching tabs
-        const isCollapsed = groupId && collapsedGroups.has(groupId) && (!searchQuery || groupTabs.length === 0)
+        // Also expand if group is being restored
+        const isCollapsed = groupId && collapsedGroups.has(groupId) && (!searchQuery || groupTabs.length === 0) && !restoringGroups.has(groupId)
         
         // Get saved group info if this is a saved group
         const savedWorkspace = group 
@@ -407,8 +411,13 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                         await chrome.tabs.update(groupTabs[0].id, { active: true })
                       }
                     } else {
-                      // Mark as restoring
+                      // Mark as restoring and expand the group immediately
                       setRestoringGroups(prev => new Set(prev).add(groupId))
+                      setCollapsedGroups(prev => {
+                        const next = new Set(prev)
+                        next.delete(groupId)
+                        return next
+                      })
                       
                       try {
                         // Restore the group
@@ -420,7 +429,8 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                           const newGroupId = await chrome.tabs.group({ tabIds: tabIds.map(t => t.id!) })
                           await chrome.tabGroups.update(newGroupId, {
                             title: savedGroup.name,
-                            color: savedGroup.color
+                            color: savedGroup.color,
+                            collapsed: false
                           })
                           
                           // Wait for all tabs to fully load
@@ -441,6 +451,18 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                           
                           await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
                           await loadSavedGroups()
+                          
+                          // Remove both the old saved group ID and new Chrome group ID from collapsed state
+                          setCollapsedGroups(prev => {
+                            const next = new Set(prev)
+                            next.delete(groupId) // Remove old saved group ID
+                            next.delete(newGroupId) // Remove new Chrome group ID
+                            return next
+                          })
+                          
+                          // Force Chrome to expand the group
+                          await chrome.tabGroups.update(newGroupId, { collapsed: false })
+                          
                           onUpdate()
                         }
                       } finally {
