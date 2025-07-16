@@ -32,10 +32,12 @@ export function PopupApp() {
   const [groups, setGroups] = useState<chrome.tabGroups.TabGroup[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(-1)
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    loadSettings()
-    loadTabs()
+    Promise.all([loadSettings(), loadTabs()]).then(() => {
+      setIsLoading(false)
+    })
   }, [])
 
   useEffect(() => {
@@ -141,6 +143,16 @@ export function PopupApp() {
     { id: 'automation', label: 'Rules', icon: TimerIcon },
     { id: 'analytics', label: 'Analytics', icon: BarChartIcon },
   ] as const
+
+  // Show minimal UI while loading to prevent flashes
+  if (isLoading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        {/* Empty div to maintain layout while loading */}
+        <div className="w-8 h-8" />
+      </div>
+    )
+  }
 
   return (
     <div className={cn('h-screen flex flex-col bg-background', settings?.densityMode)}>

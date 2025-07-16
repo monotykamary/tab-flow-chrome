@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Tab Flow - Modern Tab Manager",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "description": "A modern tab management extension with dark theme, workflow automations, and smart organization features",
   "permissions": [
     "tabs",

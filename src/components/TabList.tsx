@@ -90,7 +90,16 @@ const waitForTabsToLoad = (tabIds: number[], maxWaitMs = 10000): Promise<chrome.
 };
 
 export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: TabListProps) {
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(() => {
+    // Initialize with Chrome's current collapsed state to prevent animations
+    const initial = new Set<number>()
+    groups.forEach(group => {
+      if (group.collapsed) {
+        initial.add(group.id)
+      }
+    })
+    return initial
+  })
   const [savingGroup, setSavingGroup] = useState<number | null>(null)
   const [savedGroups, setSavedGroups] = useState<Map<number, string>>(new Map())
   const [savedGroupsData, setSavedGroupsData] = useState<Workspace[]>([])
@@ -98,16 +107,26 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   const [colorPickerPosition, setColorPickerPosition] = useState<{ top: number; left: number } | null>(null)
   const [restoringGroups, setRestoringGroups] = useState<Set<number>>(new Set())
   const [collapsingGroups, setCollapsingGroups] = useState<Set<number>>(new Set())
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [hasInitialized, setHasInitialized] = useState(false)
   const colorPickerButtonRef = useRef<HTMLButtonElement>(null)
   // Load saved groups and sync collapsed state with Chrome
   useEffect(() => {
-    loadSavedGroups()
+    loadSavedGroups().then(() => {
+      setHasInitialized(true)
+      // Mark initial load complete after animations could have played
+      requestAnimationFrame(() => {
+        setTimeout(() => setIsInitialLoad(false), 300)
+      })
+    })
   }, [])
   
-  // Sync collapsed state when groups or saved groups change
+  // Sync collapsed state when groups or saved groups change (skip on initial load)
   useEffect(() => {
-    syncCollapsedState()
-  }, [groups, savedGroupsData])
+    if (hasInitialized && !isInitialLoad) {
+      syncCollapsedState()
+    }
+  }, [groups, savedGroupsData, hasInitialized, isInitialLoad])
   
   // Auto-save active groups when they change
   useEffect(() => {
@@ -136,21 +155,30 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
     // Also check for active groups that match saved groups by name
     const activeGroups = groups
     
-    workspaces.forEach(workspace => {
-      workspace.groups.forEach(group => {
-        // First, check if there's an active group with the same name
-        const activeGroup = activeGroups.find(g => g.title === group.name)
-        if (activeGroup) {
-          // Map the active group ID to this workspace
-          savedMap.set(activeGroup.id, workspace.id)
-        } else {
-          // Otherwise, use the saved group ID as before
-          const originalId = parseInt(group.id.replace('g_', ''))
-          if (!isNaN(originalId)) {
-            savedMap.set(originalId, workspace.id)
+    // Update collapsed state for saved groups that aren't active
+    setCollapsedGroups(prev => {
+      const newCollapsed = new Set(prev)
+      
+      workspaces.forEach(workspace => {
+        workspace.groups.forEach(group => {
+          // First, check if there's an active group with the same name
+          const activeGroup = activeGroups.find(g => g.title === group.name)
+          if (activeGroup) {
+            // Map the active group ID to this workspace
+            savedMap.set(activeGroup.id, workspace.id)
+          } else {
+            // Otherwise, use the saved group ID as before
+            const originalId = parseInt(group.id.replace('g_', ''))
+            if (!isNaN(originalId)) {
+              savedMap.set(originalId, workspace.id)
+              // Saved groups that aren't active should be collapsed
+              newCollapsed.add(originalId)
+            }
           }
-        }
+        })
       })
+      
+      return newCollapsed
     })
     
     setSavedGroups(savedMap)
@@ -193,28 +221,30 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   }
 
   function syncCollapsedState() {
-    const collapsed = new Set<number>()
-    groups.forEach(group => {
-      if (group.collapsed) {
-        collapsed.add(group.id)
-      }
-    })
-    
-    // Also add saved groups that are closed (not in Chrome) as collapsed by default
-    savedGroupsData.forEach(workspace => {
-      workspace.groups.forEach(savedGroup => {
-        const groupId = parseInt(savedGroup.id.replace('g_', ''))
-        if (!isNaN(groupId) && !groups.find(g => g.id === groupId)) {
-          // This saved group is not open in Chrome, so collapse it by default
-          // But don't collapse if it's being restored
-          if (!restoringGroups.has(groupId)) {
-            collapsed.add(groupId)
-          }
+    setCollapsedGroups(prev => {
+      const collapsed = new Set<number>()
+      groups.forEach(group => {
+        if (group.collapsed) {
+          collapsed.add(group.id)
         }
       })
+      
+      // Also add saved groups that are closed (not in Chrome) as collapsed by default
+      savedGroupsData.forEach(workspace => {
+        workspace.groups.forEach(savedGroup => {
+          const groupId = parseInt(savedGroup.id.replace('g_', ''))
+          if (!isNaN(groupId) && !groups.find(g => g.id === groupId)) {
+            // This saved group is not open in Chrome, so collapse it by default
+            // But don't collapse if it's being restored
+            if (!restoringGroups.has(groupId)) {
+              collapsed.add(groupId)
+            }
+          }
+        })
+      })
+      
+      return collapsed
     })
-    
-    setCollapsedGroups(collapsed)
   }
 
   const filteredTabs = useMemo(() => {
