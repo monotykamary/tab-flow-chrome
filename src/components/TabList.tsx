@@ -40,6 +40,11 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   useEffect(() => {
     syncCollapsedState()
   }, [groups, savedGroupsData])
+  
+  // Auto-save active groups when they change
+  useEffect(() => {
+    autoSaveActiveGroups()
+  }, [groups, tabs])
 
   // Close color picker when clicking outside
   useEffect(() => {
@@ -60,17 +65,63 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
     setSavedGroupsData(workspaces)
     const savedMap = new Map<number, string>()
     
+    // Also check for active groups that match saved groups by name
+    const activeGroups = groups
+    
     workspaces.forEach(workspace => {
       workspace.groups.forEach(group => {
-        // Extract the original group ID from the saved group ID
-        const originalId = parseInt(group.id.replace('g_', ''))
-        if (!isNaN(originalId)) {
-          savedMap.set(originalId, workspace.id)
+        // First, check if there's an active group with the same name
+        const activeGroup = activeGroups.find(g => g.title === group.name)
+        if (activeGroup) {
+          // Map the active group ID to this workspace
+          savedMap.set(activeGroup.id, workspace.id)
+        } else {
+          // Otherwise, use the saved group ID as before
+          const originalId = parseInt(group.id.replace('g_', ''))
+          if (!isNaN(originalId)) {
+            savedMap.set(originalId, workspace.id)
+          }
         }
       })
     })
     
     setSavedGroups(savedMap)
+  }
+  
+  async function autoSaveActiveGroups() {
+    // Don't auto-save on initial load
+    if (groups.length === 0) return
+    
+    // For each active group, check if there's a saved workspace with the same name
+    for (const group of groups) {
+      const workspaces = await storage.getWorkspaces()
+      const existingWorkspace = workspaces.find(ws => ws.name === group.title)
+      
+      if (existingWorkspace) {
+        // Update the existing workspace with current tab state
+        const tabs = await chrome.tabs.query({ currentWindow: true, groupId: group.id })
+        
+        const updatedWorkspace: Workspace = {
+          ...existingWorkspace,
+          groups: [{
+            id: `g_${group.id}`,
+            name: group.title || 'Untitled Group',
+            color: group.color,
+            collapsed: group.collapsed,
+            tabs: tabs.map(t => t.id!),
+            createdAt: existingWorkspace.groups[0].createdAt,
+            updatedAt: Date.now()
+          }],
+          tabs: tabs.map(t => ({ ...t })),
+          updatedAt: Date.now()
+        }
+        
+        await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+      }
+    }
+    
+    // Reload to update UI
+    await loadSavedGroups()
   }
 
   function syncCollapsedState() {
@@ -119,10 +170,14 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
     // Add saved groups that are not currently open
     savedGroupsData.forEach(workspace => {
       workspace.groups.forEach(group => {
-        const originalId = parseInt(group.id.replace('g_', ''))
-        if (!isNaN(originalId) && !groups.find(g => g.id === originalId)) {
-          // This is a saved group that's not currently open
-          grouped.set(originalId, [])
+        // Check if there's an active group with the same name
+        const activeGroup = groups.find(g => g.title === group.name)
+        if (!activeGroup) {
+          // Only add if there's no active group with this name
+          const originalId = parseInt(group.id.replace('g_', ''))
+          if (!isNaN(originalId)) {
+            grouped.set(originalId, [])
+          }
         }
       })
     })
@@ -180,13 +235,8 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
       const tabs = await chrome.tabs.query({ currentWindow: true, groupId })
       const group = await chrome.tabGroups.get(groupId)
       
-      // If a workspace with the same name exists, delete it first
-      if (existingWorkspaceIndex >= 0) {
-        await storage.deleteWorkspace(workspaces[existingWorkspaceIndex].id)
-      }
-      
       const workspace: Workspace = {
-        id: `ws_${Date.now()}`,
+        id: existingWorkspaceIndex >= 0 ? workspaces[existingWorkspaceIndex].id : `ws_${Date.now()}`,
         name: group.title || groupName,
         groups: [{
           id: `g_${group.id}`,
@@ -194,15 +244,15 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
           color: group.color,
           collapsed: false,
           tabs: tabs.map(t => t.id!),
-          createdAt: Date.now(),
+          createdAt: existingWorkspaceIndex >= 0 ? workspaces[existingWorkspaceIndex].groups[0].createdAt : Date.now(),
           updatedAt: Date.now()
         }],
         tabs: tabs.map(t => ({ ...t })),
-        createdAt: Date.now(),
+        createdAt: existingWorkspaceIndex >= 0 ? workspaces[existingWorkspaceIndex].createdAt : Date.now(),
         updatedAt: Date.now()
       }
 
-      await storage.saveWorkspace(workspace)
+      await storage.saveOrUpdateWorkspaceByName(workspace)
     }
     
     await loadSavedGroups() // Reload saved groups to update UI
@@ -234,12 +284,12 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
         const isCollapsed = groupId && collapsedGroups.has(groupId) && (!searchQuery || groupTabs.length === 0)
         
         // Get saved group info if this is a saved group
-        const savedWorkspace = savedGroupsData.find(ws => 
-          ws.groups.some(g => parseInt(g.id.replace('g_', '')) === groupId)
-        )
-        const savedGroup = savedWorkspace?.groups.find(g => 
-          parseInt(g.id.replace('g_', '')) === groupId
-        )
+        const savedWorkspace = group 
+          ? savedGroupsData.find(ws => ws.name === group.title)
+          : savedGroupsData.find(ws => 
+              ws.groups.some(g => parseInt(g.id.replace('g_', '')) === groupId)
+            )
+        const savedGroup = savedWorkspace?.groups[0]
         
         // Show saved groups even if they're closed in Chrome
         if (!group && savedGroup) {
@@ -297,28 +347,22 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                           color: savedGroup.color
                         })
                         
-                        // Wait for tabs to load, then update the saved group with new IDs
-                        setTimeout(async () => {
-                          // Get the updated tabs with proper titles
-                          const updatedTabs = await chrome.tabs.query({ groupId: newGroupId })
-                          
-                          // Update the workspace with the new group ID
-                          const updatedWorkspace: Workspace = {
-                            ...savedWorkspace,
-                            groups: [{
-                              ...savedGroup,
-                              id: `g_${newGroupId}`,
-                              tabs: updatedTabs.map(t => t.id!),
-                              updatedAt: Date.now()
-                            }],
-                            tabs: updatedTabs,
+                        // Immediately update the saved workspace with new group ID
+                        const updatedWorkspace: Workspace = {
+                          ...savedWorkspace,
+                          groups: [{
+                            ...savedGroup,
+                            id: `g_${newGroupId}`,
+                            tabs: tabIds.map(t => t.id!),
                             updatedAt: Date.now()
-                          }
-                          
-                          await storage.saveWorkspace(updatedWorkspace)
-                          await loadSavedGroups()
-                          onUpdate()
-                        }, 1500)
+                          }],
+                          tabs: savedWorkspace.tabs, // Keep original tab info for now
+                          updatedAt: Date.now()
+                        }
+                        
+                        await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+                        await loadSavedGroups()
+                        onUpdate()
                       }
                     }
                   }}

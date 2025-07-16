@@ -40,6 +40,24 @@ export const storage = {
     await chrome.storage.local.set({ [STORAGE_KEYS.WORKSPACES]: workspaces })
   },
 
+  async saveOrUpdateWorkspaceByName(workspace: Workspace): Promise<void> {
+    const workspaces = await this.getWorkspaces()
+    const index = workspaces.findIndex(w => w.name === workspace.name)
+    
+    if (index >= 0) {
+      // Update existing workspace with the same name
+      workspaces[index] = {
+        ...workspace,
+        id: workspaces[index].id, // Keep the original ID
+        createdAt: workspaces[index].createdAt // Keep original creation time
+      }
+    } else {
+      workspaces.push(workspace)
+    }
+    
+    await chrome.storage.local.set({ [STORAGE_KEYS.WORKSPACES]: workspaces })
+  },
+
   async deleteWorkspace(id: string): Promise<void> {
     const workspaces = await this.getWorkspaces()
     const filtered = workspaces.filter(w => w.id !== id)

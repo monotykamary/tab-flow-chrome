@@ -1,5 +1,5 @@
 import { storage } from './utils/storage'
-import type { TabInfo, TabRule, RuleCondition, RuleAction } from './types'
+import type { TabInfo, TabRule, RuleCondition, RuleAction, Workspace } from './types'
 
 // Tab tracking
 const tabLastAccessed = new Map<number, number>()
@@ -27,11 +27,51 @@ initializeExtension().catch(console.error)
 // Initialize automations
 async function initializeExtension() {
   await setupAlarms()
+  await reconcileSavedGroups()
   
   // Also check if we need to run any immediate tasks
   const settings = await storage.getSettings()
   if (settings.autoArchiveEnabled) {
     console.log('Auto-archive is enabled, checking for inactive tabs...')
+  }
+}
+
+// Reconcile saved groups with active Chrome groups
+async function reconcileSavedGroups() {
+  try {
+    const [activeGroups, workspaces] = await Promise.all([
+      chrome.tabGroups.query({}),
+      storage.getWorkspaces()
+    ])
+    
+    // Update saved workspaces that have matching active groups
+    for (const workspace of workspaces) {
+      const activeGroup = activeGroups.find(g => g.title === workspace.name)
+      
+      if (activeGroup) {
+        // This saved group is now active, update it with current state
+        const tabs = await chrome.tabs.query({ groupId: activeGroup.id })
+        
+        const updatedWorkspace: Workspace = {
+          ...workspace,
+          groups: [{
+            ...workspace.groups[0],
+            id: `g_${activeGroup.id}`,
+            color: activeGroup.color,
+            collapsed: activeGroup.collapsed,
+            tabs: tabs.map(t => t.id!),
+            updatedAt: Date.now()
+          }],
+          tabs: tabs.map(t => ({ ...t })),
+          updatedAt: Date.now()
+        }
+        
+        await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+        console.log(`Updated saved group "${workspace.name}" with active group ID ${activeGroup.id}`)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to reconcile saved groups:', error)
   }
 }
 
@@ -80,6 +120,36 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   tabLastAccessed.delete(tabId)
   tabTimeSpent.delete(tabId)
   await updateDailyStats('closed')
+})
+
+// Track group updates
+chrome.tabGroups.onUpdated.addListener(async (group) => {
+  // Auto-save when a group is updated (renamed, color changed, etc.)
+  if (group.title) {
+    const tabs = await chrome.tabs.query({ groupId: group.id })
+    const workspaces = await storage.getWorkspaces()
+    const existingWorkspace = workspaces.find(ws => ws.name === group.title)
+    
+    if (existingWorkspace && tabs.length > 0) {
+      // Update the existing saved workspace
+      const updatedWorkspace: Workspace = {
+        ...existingWorkspace,
+        groups: [{
+          ...existingWorkspace.groups[0],
+          id: `g_${group.id}`,
+          name: group.title,
+          color: group.color,
+          collapsed: group.collapsed,
+          tabs: tabs.map(t => t.id!),
+          updatedAt: Date.now()
+        }],
+        tabs: tabs.map(t => ({ ...t })),
+        updatedAt: Date.now()
+      }
+      
+      await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+    }
+  }
 })
 
 // Setup alarms for scheduled tasks
