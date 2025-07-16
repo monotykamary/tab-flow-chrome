@@ -68,4 +68,6 @@ export interface Settings {
   tabLimitEnabled: boolean;
   tabLimitCount: number;
   accentColor: 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'red';
+  autoCollapseGroups: boolean;
+  autoCollapseDelay: number;
 }

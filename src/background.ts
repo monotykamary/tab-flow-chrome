@@ -75,6 +75,91 @@ async function reconcileSavedGroups() {
   }
 }
 
+// Handle auto-collapse of inactive groups
+async function handleAutoCollapseGroups(activeTabId: number) {
+  try {
+    const settings = await storage.getSettings()
+    if (!settings.autoCollapseGroups) return
+    
+    const delay = settings.autoCollapseDelay * 1000 // Convert to milliseconds
+    
+    // Get the active tab and its group
+    const activeTab = await chrome.tabs.get(activeTabId)
+    const activeGroupId = activeTab.groupId
+    
+    // Get all groups in the same window
+    const groups = await chrome.tabGroups.query({ windowId: activeTab.windowId })
+    
+    // Clear any existing timeout for the active group (if it's grouped)
+    if (activeGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+      const existingTimeout = groupCollapseTimeouts.get(activeGroupId)
+      if (existingTimeout) {
+        clearTimeout(existingTimeout)
+        groupCollapseTimeouts.delete(activeGroupId)
+      }
+    }
+    
+    // For each group that's not the active one, set up collapse timeout
+    for (const group of groups) {
+      // Skip if already collapsed
+      if (group.collapsed) {
+        continue
+      }
+      
+      // Skip if this is the active group (but only if the active tab is grouped)
+      if (activeGroupId !== chrome.tabGroups.TAB_GROUP_ID_NONE && group.id === activeGroupId) {
+        continue
+      }
+      
+      // Clear any existing timeout
+      const existingTimeout = groupCollapseTimeouts.get(group.id)
+      if (existingTimeout) {
+        clearTimeout(existingTimeout)
+      }
+      
+      // Set new timeout
+      if (delay === 0) {
+        // "Immediate" collapse with minimal delay to avoid Chrome's "user may be dragging" error
+        const timeout = setTimeout(async () => {
+          try {
+            await chrome.tabGroups.update(group.id, { collapsed: true })
+            groupCollapseTimeouts.delete(group.id)
+          } catch (error) {
+            // Group might have been removed
+            console.error(`Could not collapse group ${group.id}:`, error)
+            groupCollapseTimeouts.delete(group.id)
+          }
+        }, 50) // 50ms delay to let Chrome finish processing user interaction
+        
+        groupCollapseTimeouts.set(group.id, timeout)
+      } else {
+        // Delayed collapse
+        const timeout = setTimeout(async () => {
+          try {
+            // Double-check the group still exists and isn't the active group
+            const currentActiveTab = await chrome.tabs.query({ active: true, windowId: activeTab.windowId })
+            const currentActiveGroupId = currentActiveTab[0]?.groupId || chrome.tabGroups.TAB_GROUP_ID_NONE
+            
+            // Collapse if the active tab is ungrouped or in a different group
+            if (currentActiveGroupId === chrome.tabGroups.TAB_GROUP_ID_NONE || group.id !== currentActiveGroupId) {
+              await chrome.tabGroups.update(group.id, { collapsed: true })
+            }
+            groupCollapseTimeouts.delete(group.id)
+          } catch (error) {
+            // Group might have been removed or is now active
+            console.error(`Could not collapse group ${group.id}:`, error)
+            groupCollapseTimeouts.delete(group.id)
+          }
+        }, delay)
+        
+        groupCollapseTimeouts.set(group.id, timeout)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to handle auto-collapse groups:', error)
+  }
+}
+
 // Listen for settings changes to update alarms
 chrome.storage.onChanged.addListener(async (changes, namespace) => {
   if (namespace === 'sync' && changes.settings) {
@@ -82,6 +167,9 @@ chrome.storage.onChanged.addListener(async (changes, namespace) => {
     await setupAlarms()
   }
 })
+
+// Track group collapse timeouts
+const groupCollapseTimeouts = new Map<number, NodeJS.Timeout>()
 
 // Track tab activity
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -95,6 +183,58 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   activeTabId = activeInfo.tabId
   lastActiveTime = Date.now()
   tabLastAccessed.set(activeInfo.tabId, Date.now())
+  
+  // Handle auto-collapse groups
+  const settings = await storage.getSettings()
+  if (settings.autoCollapseGroups) {
+    await handleAutoCollapseGroups(activeInfo.tabId)
+  }
+})
+
+// Also listen for tab highlight changes (when clicking on tabs)
+chrome.tabs.onHighlighted.addListener(async (highlightInfo) => {
+  const settings = await storage.getSettings()
+  if (settings.autoCollapseGroups && highlightInfo.tabIds.length > 0) {
+    // Use the first highlighted tab
+    await handleAutoCollapseGroups(highlightInfo.tabIds[0])
+  }
+})
+
+// Listen for tab attach events (moving tabs between windows)
+chrome.tabs.onAttached.addListener(async (tabId, attachInfo) => {
+  const settings = await storage.getSettings()
+  if (settings.autoCollapseGroups) {
+    // Small delay to let Chrome update the tab state
+    setTimeout(async () => {
+      await handleAutoCollapseGroups(tabId)
+    }, 100)
+  }
+})
+
+// Listen for tab detach events
+chrome.tabs.onDetached.addListener(async (tabId, detachInfo) => {
+  const settings = await storage.getSettings()
+  if (settings.autoCollapseGroups) {
+    // Handle auto-collapse in the old window
+    const tabs = await chrome.tabs.query({ active: true, windowId: detachInfo.oldWindowId })
+    if (tabs.length > 0 && tabs[0].id) {
+      await handleAutoCollapseGroups(tabs[0].id)
+    }
+  }
+})
+
+// Handle window focus changes for auto-collapse
+chrome.windows.onFocusChanged.addListener(async (windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) return
+  
+  const settings = await storage.getSettings()
+  if (settings.autoCollapseGroups) {
+    // Get the active tab in the focused window
+    const tabs = await chrome.tabs.query({ active: true, windowId })
+    if (tabs.length > 0 && tabs[0].id) {
+      await handleAutoCollapseGroups(tabs[0].id)
+    }
+  }
 })
 
 // Track new tabs
@@ -112,6 +252,14 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete') {
     await applyRules(tab)
     await checkDuplicates(tab)
+  }
+  
+  // Handle group changes for auto-collapse
+  if ('groupId' in changeInfo) {
+    const settings = await storage.getSettings()
+    if (settings.autoCollapseGroups && tab.active) {
+      await handleAutoCollapseGroups(tabId)
+    }
   }
 })
 
@@ -149,6 +297,15 @@ chrome.tabGroups.onUpdated.addListener(async (group) => {
       
       await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
     }
+  }
+})
+
+// Clean up collapse timeout when a group is removed
+chrome.tabGroups.onRemoved.addListener(async (group) => {
+  const timeout = groupCollapseTimeouts.get(group.id)
+  if (timeout) {
+    clearTimeout(timeout)
+    groupCollapseTimeouts.delete(group.id)
   }
 })
 

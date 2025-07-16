@@ -10,7 +10,8 @@ import {
   MixerHorizontalIcon,
   BellIcon,
   DownloadIcon,
-  UploadIcon
+  UploadIcon,
+  LayersIcon
 } from '@radix-ui/react-icons'
 import { cn } from '@/utils/cn'
 import { storage } from '@/utils/storage'
@@ -250,7 +251,36 @@ export function OptionsApp() {
             </div>
           </Section>
 
-
+          {/* Group Management */}
+          <Section title="Group Management" icon={LayersIcon}>
+            <div className="space-y-4">
+              <Switch
+                label="Auto-collapse inactive groups"
+                description="Automatically collapse tab groups when switching away"
+                checked={settings.autoCollapseGroups}
+                onChange={(checked) => updateSetting('autoCollapseGroups', checked)}
+              />
+              
+              {settings.autoCollapseGroups && (
+                <div>
+                  <label className="text-sm font-medium mb-2 block">
+                    Collapse delay (seconds)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="30"
+                    value={settings.autoCollapseDelay}
+                    onChange={(e) => updateSetting('autoCollapseDelay', Number(e.target.value))}
+                    className="w-full p-2 rounded-md border bg-background"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Wait this many seconds before collapsing inactive groups (0 for immediate)
+                  </p>
+                </div>
+              )}
+            </div>
+          </Section>
 
           {/* Data Management */}
           <Section title="Data Management" icon={DownloadIcon}>

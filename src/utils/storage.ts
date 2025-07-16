@@ -111,5 +111,7 @@ function getDefaultSettings(): Settings {
     tabLimitEnabled: false,
     tabLimitCount: 50,
     accentColor: 'blue',
+    autoCollapseGroups: false,
+    autoCollapseDelay: 5,
   }
 }
