@@ -228,7 +228,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
 
   return (
     <div className="space-y-4">
-      {Array.from(groupedTabs.entries()).map(([groupId, groupTabs]) => {
+      {Array.from(groupedTabs.entries()).map(([groupId, groupTabs], groupIndex) => {
         const group = getGroupInfo(groupId)
         // Expand groups when searching and they have matching tabs
         const isCollapsed = groupId && collapsedGroups.has(groupId) && (!searchQuery || groupTabs.length === 0)
@@ -245,11 +245,14 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
         if (!group && savedGroup) {
           const savedTabs = savedWorkspace?.tabs || []
           
+          const groupAnimationDuration = Math.min(0.15 + (groupIndex * 0.05), 0.3)
+          
           return (
             <motion.div
               key={groupId || 'ungrouped'}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: groupAnimationDuration }}
               className="rounded-lg overflow-hidden glass"
             >
               <div 
@@ -394,11 +397,14 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
           return null
         }
         
+        const groupAnimationDuration = Math.min(0.15 + (groupIndex * 0.05), 0.3)
+        
         return (
           <motion.div
             key={groupId || 'ungrouped'}
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: groupAnimationDuration }}
             className={cn(
               "rounded-lg",
               !group && "glass"
@@ -521,22 +527,29 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                     className={cn("space-y-1", group ? "p-2" : "p-2")}
                     style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 15%, transparent)` } : undefined}
                   >
-                    {groupTabs.map((tab) => (
-                      <motion.div
-                        key={tab.id}
-                        layout
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: 10 }}
-                        className={cn(
-                          'group flex items-center gap-2 p-2 rounded-md',
-                          'hover:bg-accent/50 cursor-pointer transition-colors',
-                          !group && 'glass glass-hover',
-                          selectedTabId === tab.id && 'ring-2 ring-primary bg-primary/10'
-                        )}
-                        style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 10%, transparent)` } : undefined}
-                        onClick={() => tab.id && activateTab(tab.id)}
-                      >
+                    {groupTabs.map((tab, tabIndex) => {
+                      // Calculate animation parameters based on position
+                      // First tab is instant, then gradual increase
+                      const animationDuration = tabIndex === 0 ? 0 : Math.min(0.1 + (tabIndex * 0.05), 0.3)
+                      const animationDistance = tabIndex === 0 ? 0 : Math.min(5 + (tabIndex * 1.5), 10)
+                      
+                      return (
+                        <motion.div
+                          key={tab.id}
+                          layout
+                          initial={{ opacity: 0, x: -animationDistance }}
+                          animate={{ opacity: 1, x: 0 }}
+                          exit={{ opacity: 0, x: animationDistance }}
+                          transition={{ duration: animationDuration }}
+                          className={cn(
+                            'group flex items-center gap-2 p-2 rounded-md',
+                            'hover:bg-accent/50 cursor-pointer transition-colors',
+                            !group && 'glass glass-hover',
+                            selectedTabId === tab.id && 'ring-2 ring-primary bg-primary/10'
+                          )}
+                          style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 10%, transparent)` } : undefined}
+                          onClick={() => tab.id && activateTab(tab.id)}
+                        >
                   {/* Favicon */}
                   <div className="w-4 h-4 flex-shrink-0">
                     {tab.favIconUrl ? (
@@ -591,8 +604,9 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                       <Cross2Icon className="w-3 h-3" />
                     </button>
                   </div>
-                      </motion.div>
-                    ))}
+                        </motion.div>
+                      )
+                    })}
                   </div>
                 </motion.div>
               )}
