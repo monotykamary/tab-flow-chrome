@@ -347,22 +347,28 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                           color: savedGroup.color
                         })
                         
-                        // Immediately update the saved workspace with new group ID
-                        const updatedWorkspace: Workspace = {
-                          ...savedWorkspace,
-                          groups: [{
-                            ...savedGroup,
-                            id: `g_${newGroupId}`,
-                            tabs: tabIds.map(t => t.id!),
+                        // Wait for tabs to load, then update the saved group with new IDs
+                        setTimeout(async () => {
+                          // Get the updated tabs with proper titles
+                          const updatedTabs = await chrome.tabs.query({ groupId: newGroupId })
+                          
+                          // Update the workspace with the new group ID and loaded tab info
+                          const updatedWorkspace: Workspace = {
+                            ...savedWorkspace,
+                            groups: [{
+                              ...savedGroup,
+                              id: `g_${newGroupId}`,
+                              tabs: updatedTabs.map(t => t.id!),
+                              updatedAt: Date.now()
+                            }],
+                            tabs: updatedTabs,
                             updatedAt: Date.now()
-                          }],
-                          tabs: savedWorkspace.tabs, // Keep original tab info for now
-                          updatedAt: Date.now()
-                        }
-                        
-                        await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
-                        await loadSavedGroups()
-                        onUpdate()
+                          }
+                          
+                          await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+                          await loadSavedGroups()
+                          onUpdate()
+                        }, 1500)
                       }
                     }
                   }}
