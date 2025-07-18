@@ -1,6 +1,6 @@
 {
   "name": "tab-flow",
-  "version": "1.0.13",
+  "version": "1.0.14",
   "description": "Modern tab management Chrome extension",
   "type": "module",
   "scripts": {
