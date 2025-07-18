@@ -19,6 +19,7 @@ async function build() {
         'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development')
       }
     })
+    
     console.log('Background script built successfully')
   } catch (error) {
     console.error('Build failed:', error)

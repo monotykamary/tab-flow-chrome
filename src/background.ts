@@ -1,5 +1,5 @@
 import { storage } from './utils/storage'
-import type { TabInfo, TabRule, RuleCondition, RuleAction, Workspace } from './types'
+import type { TabRule, RuleCondition, RuleAction, Workspace, Settings } from './types'
 
 // Tab tracking
 const tabLastAccessed = new Map<number, number>()
@@ -28,6 +28,9 @@ initializeExtension().catch(console.error)
 async function initializeExtension() {
   await setupAlarms()
   await reconcileSavedGroups()
+  
+  // Load previous tab ID from storage
+  previousTabId = await storage.getPreviousTabId()
   
   // Also check if we need to run any immediate tasks
   const settings = await getCachedSettings()
@@ -193,6 +196,8 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
     const timeSpent = Date.now() - lastActiveTime
     tabTimeSpent.set(activeTabId, (tabTimeSpent.get(activeTabId) || 0) + timeSpent)
     previousTabId = activeTabId
+    // Persist previous tab ID to storage
+    await storage.setPreviousTabId(activeTabId)
   }
 
   activeTabId = activeInfo.tabId
@@ -622,7 +627,21 @@ async function suspendMemoryHeavyTabs() {
   if (estimatedMemoryMB > settings.memorySaverThresholdMB) {
     // Find inactive tabs to suspend
     const inactiveTabs = tabs.filter(tab => {
-      if (!tab.id) return false
+      if (!tab.id || !tab.url) return false
+      
+      // Check if domain is excluded
+      const url = new URL(tab.url)
+      const domain = url.hostname
+      const isExcluded = settings.memorySaverExcludedDomains.some(excluded => {
+        // Simple wildcard matching - exact match or ends with excluded domain
+        if (excluded.startsWith('*.')) {
+          return domain.endsWith(excluded.slice(2))
+        }
+        return domain === excluded
+      })
+      
+      if (isExcluded) return false
+      
       const lastAccessed = tabLastAccessed.get(tab.id) || 0
       return Date.now() - lastAccessed > 15 * 60 * 1000 // 15 minutes
     })

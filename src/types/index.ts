@@ -33,6 +33,7 @@ export interface TabRule {
   conditionOperator?: 'AND' | 'OR'; // Default to AND for backward compatibility
   actions: RuleAction[];
   createdAt: number;
+  updatedAt: number;
 }
 
 export interface RuleCondition {
@@ -64,6 +65,7 @@ export interface Settings {
   duplicateDetection: boolean;
   memorySaverEnabled: boolean;
   memorySaverThresholdMB: number;
+  memorySaverExcludedDomains: string[];
   dailyCleanupEnabled: boolean;
   dailyCleanupTime: string;
   tabLimitEnabled: boolean;

@@ -1,4 +1,4 @@
-import type { Settings, TabGroup, TabRule, Workspace } from '@/types'
+import type { Settings, TabRule, Workspace } from '@/types'
 
 const STORAGE_KEYS = {
   SETTINGS: 'settings',
@@ -7,12 +7,18 @@ const STORAGE_KEYS = {
   TAB_RULES: 'tabRules',
   TAB_STATS: 'tabStats',
   ARCHIVED_TABS: 'archivedTabs',
+  PREVIOUS_TAB_ID: 'previousTabId',
 } as const
 
 export const storage = {
   async getSettings(): Promise<Settings> {
     const result = await chrome.storage.sync.get(STORAGE_KEYS.SETTINGS)
-    return result[STORAGE_KEYS.SETTINGS] || getDefaultSettings()
+    const stored = result[STORAGE_KEYS.SETTINGS]
+    if (!stored) {
+      return getDefaultSettings()
+    }
+    // Merge with defaults to ensure new fields are included
+    return { ...getDefaultSettings(), ...stored }
   },
 
   async setSettings(settings: Partial<Settings>): Promise<void> {
@@ -96,6 +102,15 @@ export const storage = {
     const filtered = rules.filter(r => r.id !== id)
     await chrome.storage.sync.set({ [STORAGE_KEYS.TAB_RULES]: filtered })
   },
+
+  async getPreviousTabId(): Promise<number | null> {
+    const result = await chrome.storage.local.get(STORAGE_KEYS.PREVIOUS_TAB_ID)
+    return result[STORAGE_KEYS.PREVIOUS_TAB_ID] || null
+  },
+
+  async setPreviousTabId(tabId: number | null): Promise<void> {
+    await chrome.storage.local.set({ [STORAGE_KEYS.PREVIOUS_TAB_ID]: tabId })
+  },
 }
 
 function getDefaultSettings(): Settings {
@@ -106,6 +121,7 @@ function getDefaultSettings(): Settings {
     duplicateDetection: true,
     memorySaverEnabled: true,
     memorySaverThresholdMB: 500,
+    memorySaverExcludedDomains: [],
     dailyCleanupEnabled: false,
     dailyCleanupTime: '22:00',
     tabLimitEnabled: false,

@@ -195,22 +195,67 @@ export function OptionsApp() {
               />
               
               {settings.memorySaverEnabled && (
-                <div>
-                  <label className="text-sm font-medium mb-2 block">
-                    Memory threshold (MB)
-                  </label>
-                  <input
-                    type="number"
-                    min="100"
-                    max="2000"
-                    step="100"
-                    value={settings.memorySaverThresholdMB}
-                    onChange={(e) => updateSetting('memorySaverThresholdMB', Number(e.target.value))}
-                    className="w-full p-2 rounded-md border bg-background"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Suspend tabs when memory usage exceeds this threshold
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Memory threshold (MB)
+                    </label>
+                    <input
+                      type="number"
+                      min="100"
+                      max="2000"
+                      step="100"
+                      value={settings.memorySaverThresholdMB}
+                      onChange={(e) => updateSetting('memorySaverThresholdMB', Number(e.target.value))}
+                      className="w-full p-2 rounded-md border bg-background"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Suspend tabs when memory usage exceeds this threshold
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">
+                      Exclude domains from memory management
+                    </label>
+                    <div className="space-y-2">
+                      {settings.memorySaverExcludedDomains.map((domain, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={domain}
+                            onChange={(e) => {
+                              const newDomains = [...settings.memorySaverExcludedDomains]
+                              newDomains[index] = e.target.value
+                              updateSetting('memorySaverExcludedDomains', newDomains)
+                            }}
+                            placeholder="example.com or *.example.com"
+                            className="flex-1 p-2 rounded-md border bg-background text-sm"
+                          />
+                          <button
+                            onClick={() => {
+                              const newDomains = settings.memorySaverExcludedDomains.filter((_, i) => i !== index)
+                              updateSetting('memorySaverExcludedDomains', newDomains)
+                            }}
+                            className="p-2 rounded-md hover:bg-destructive hover:text-destructive-foreground"
+                          >
+                            <TrashIcon className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          updateSetting('memorySaverExcludedDomains', [...settings.memorySaverExcludedDomains, ''])
+                        }}
+                        className="text-sm text-primary hover:underline"
+                      >
+                        + Add domain
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Enter domains to exclude from memory management. Use *.example.com for subdomains.
+                    </p>
+                  </div>
                 </div>
               )}
               

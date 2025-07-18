@@ -4,11 +4,8 @@ import {
   PlusIcon, 
   TrashIcon, 
   Pencil1Icon,
-  CheckIcon,
   Cross2Icon,
-  ChevronDownIcon,
-  MagicWandIcon,
-  ExclamationTriangleIcon
+  MagicWandIcon
 } from '@radix-ui/react-icons'
 import { storage } from '@/utils/storage'
 import type { TabRule, RuleCondition, RuleAction } from '@/types'
@@ -25,11 +22,11 @@ export function TabRules() {
 
   async function loadRules() {
     const r = await storage.getTabRules()
-    setRules(r)
+    setRules(r.sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt)))
   }
 
   async function saveRule(rule: TabRule) {
-    await storage.saveTabRule(rule)
+    await storage.saveTabRule({ ...rule, updatedAt: Date.now() })
     await loadRules()
     setEditingRule(null)
     setIsCreating(false)
@@ -43,13 +40,14 @@ export function TabRules() {
   }
 
   async function toggleRule(rule: TabRule) {
-    await storage.saveTabRule({ ...rule, enabled: !rule.enabled })
+    await storage.saveTabRule({ ...rule, enabled: !rule.enabled, updatedAt: Date.now() })
     await loadRules()
   }
 
   function createNewRule(): TabRule {
+    const now = Date.now()
     return {
-      id: `rule_${Date.now()}`,
+      id: `rule_${now}`,
       name: 'New Rule',
       enabled: true,
       conditions: [{
@@ -61,7 +59,8 @@ export function TabRules() {
         type: 'group',
         value: 'New Group'
       }],
-      createdAt: Date.now()
+      createdAt: now,
+      updatedAt: now
     }
   }
 
@@ -78,17 +77,41 @@ export function TabRules() {
             Automatically organize tabs based on conditions
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditingRule(createNewRule())
-            setIsCreating(true)
-          }}
-          className="p-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
-          aria-label="Create new rule"
-        >
-          <PlusIcon className="w-4 h-4" />
-        </button>
+        {!isCreating && (
+          <button
+            onClick={() => {
+              setEditingRule(createNewRule())
+              setIsCreating(true)
+            }}
+            className="p-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            aria-label="Create new rule"
+          >
+            <PlusIcon className="w-4 h-4" />
+          </button>
+        )}
       </div>
+
+      {/* New Rule Form - Always at top when creating */}
+      <AnimatePresence>
+        {isCreating && editingRule && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-4 rounded-lg glass border-2 border-primary/20"
+          >
+            <RuleEditor
+              rule={editingRule}
+              onChange={setEditingRule}
+              onSave={() => saveRule(editingRule)}
+              onCancel={() => {
+                setEditingRule(null)
+                setIsCreating(false)
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Rules List */}
       <div className="space-y-2">
@@ -142,24 +165,6 @@ export function TabRules() {
               </AnimatePresence>
             </motion.div>
           ))}
-
-          {isCreating && editingRule && !rules.find(r => r.id === editingRule.id) && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-4 rounded-lg glass"
-            >
-              <RuleEditor
-                rule={editingRule}
-                onChange={setEditingRule}
-                onSave={() => saveRule(editingRule)}
-                onCancel={() => {
-                  setEditingRule(null)
-                  setIsCreating(false)
-                }}
-              />
-            </motion.div>
-          )}
         </AnimatePresence>
       </div>
 

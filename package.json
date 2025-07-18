@@ -1,6 +1,6 @@
 {
   "name": "tab-flow",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Modern tab management Chrome extension",
   "type": "module",
   "scripts": {
@@ -19,6 +19,8 @@
   "devDependencies": {
     "@types/chrome": "^0.0.260",
     "@types/node": "^20.11.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
     "@typescript-eslint/eslint-plugin": "^6.19.0",
     "@typescript-eslint/parser": "^6.19.0",
     "@vitejs/plugin-react": "^4.2.1",
