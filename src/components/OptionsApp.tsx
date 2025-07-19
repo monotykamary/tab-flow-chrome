@@ -11,7 +11,8 @@ import {
   BellIcon,
   DownloadIcon,
   UploadIcon,
-  LayersIcon
+  LayersIcon,
+  HeartIcon
 } from '@radix-ui/react-icons'
 import { cn } from '@/utils/cn'
 import { storage } from '@/utils/storage'
@@ -380,6 +381,27 @@ export function OptionsApp() {
               </p>
             </div>
           </Section>
+
+          {/* Support Development */}
+          <Section title="Support Development" icon={HeartIcon}>
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                If you find Tab Flow helpful, consider supporting the development to help keep the project alive and add new features.
+              </p>
+              <a
+                href="https://buymeacoffee.com/monotykamary"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block"
+              >
+                <img
+                  src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png"
+                  alt="Buy Me A Coffee"
+                  className="h-12 w-auto hover:opacity-90 transition-opacity"
+                />
+              </a>
+            </div>
+          </Section>
         </div>
 
         {/* Save indicator */}
@@ -389,9 +411,10 @@ export function OptionsApp() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 20 }}
-              className="fixed bottom-8 right-8 px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-lg"
             >
-              Settings saved
+              <div className="fixed bottom-8 right-8 px-4 py-2 bg-primary text-primary-foreground rounded-md shadow-lg">
+                Settings saved
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
