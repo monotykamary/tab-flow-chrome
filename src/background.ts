@@ -551,8 +551,17 @@ async function addToGroup(tabId: number, groupName: string) {
     await chrome.tabs.group({ tabIds: tabId, groupId: groups[0].id })
   } else {
     const groupId = await chrome.tabs.group({ tabIds: tabId })
-    await chrome.tabGroups.update(groupId, { title: groupName })
+    const randomColor = getRandomGroupColor()
+    await chrome.tabGroups.update(groupId, { title: groupName, color: randomColor })
   }
+}
+
+// Get a random color for new groups
+function getRandomGroupColor(): chrome.tabGroups.ColorEnum {
+  const colors: chrome.tabGroups.ColorEnum[] = [
+    'grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'
+  ]
+  return colors[Math.floor(Math.random() * colors.length)]
 }
 
 // Check for duplicate tabs
