@@ -5,7 +5,7 @@
 A powerful Chrome extension for managing tabs with workflow automation, dark theme support, and smart organization features.
 
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/monotykamary)
-[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Coming%20Soon-blue?style=for-the-badge&logo=google-chrome)](https://chrome.google.com/webstore)
+[![Chrome Web Store](https://img.shields.io/badge/Chrome%20Web%20Store-Available-blue?style=for-the-badge&logo=google-chrome)](https://chromewebstore.google.com/detail/cglhpbmjmnnfhnhnimgmademhaemmdlg)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 </div>
@@ -79,6 +79,12 @@ A powerful Chrome extension for managing tabs with workflow automation, dark the
 - **Minimal Redraws** - Smart state management prevents unnecessary animations
 
 ## 🚀 Installation
+
+### Chrome Web Store
+
+Install directly from the Chrome Web Store:
+
+[![Install from Chrome Web Store](https://img.shields.io/badge/Install-Chrome%20Web%20Store-blue?style=for-the-badge&logo=google-chrome)](https://chromewebstore.google.com/detail/cglhpbmjmnnfhnhnimgmademhaemmdlg)
 
 ### From Source
 
