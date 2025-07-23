@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   ArchiveIcon, 
@@ -7,7 +7,6 @@ import {
   ClockIcon,
   Cross2Icon
 } from '@radix-ui/react-icons'
-import { cn } from '@/utils/cn'
 
 interface ArchivedTab {
   url: string
@@ -101,66 +100,63 @@ export function ArchivedTabs() {
       {/* Archived Tabs List */}
       <div className="space-y-2">
         <AnimatePresence>
-          {sortedTabs.map((tab, index) => {
+          {sortedTabs.map((tab) => {
             const originalIndex = archivedTabs.indexOf(tab)
             return (
-              <motion.div
-                key={`${tab.url}-${tab.archivedAt}`}
-                layout
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 10 }}
-                className="group flex items-center gap-2 p-3 rounded-lg glass glass-hover"
-              >
-                {/* Favicon */}
-                <div className="w-4 h-4 flex-shrink-0">
-                  {tab.favIconUrl ? (
-                    <img 
-                      src={tab.favIconUrl} 
-                      alt="" 
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none'
-                      }}
-                    />
-                  ) : (
-                    <div className="w-4 h-4 bg-muted rounded" />
-                  )}
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{tab.title || 'Untitled'}</p>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="truncate">{new URL(tab.url).hostname}</span>
-                    <span className="flex items-center gap-1">
-                      <ClockIcon className="w-3 h-3" />
-                      {formatDate(tab.archivedAt)}
-                    </span>
-                    {tab.timeSpent && (
-                      <span>{formatDuration(tab.timeSpent)}</span>
+                <motion.div
+                  key={`${tab.url}-${tab.archivedAt}`}
+                  layout
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="group relative flex items-center gap-2 p-3 rounded-lg glass glass-hover"
+                >
+                  {/* Favicon */}
+                  <div className="w-4 h-4 flex-shrink-0">
+                    {tab.favIconUrl ? (
+                      <img 
+                        src={tab.favIconUrl} 
+                        alt="" 
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    ) : (
+                      <div className="w-4 h-4 bg-muted rounded" />
                     )}
                   </div>
-                </div>
-                
-                {/* Actions */}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => restoreTab(tab, originalIndex)}
-                    className="p-1.5 rounded hover:bg-accent"
-                    aria-label="Restore tab"
-                  >
-                    <ExternalLinkIcon className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => deleteArchivedTab(originalIndex)}
-                    className="p-1.5 rounded hover:bg-destructive hover:text-destructive-foreground"
-                    aria-label="Delete archived tab"
-                  >
-                    <Cross2Icon className="w-3 h-3" />
-                  </button>
-                </div>
-              </motion.div>
+                  
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{tab.title || 'Untitled'}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <span className="truncate">{new URL(tab.url).hostname}</span>
+                      <span className="flex items-center gap-1">
+                        <ClockIcon className="w-3 h-3" />
+                        {formatDate(tab.archivedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Actions - overlay on the right */}
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm rounded-md p-1 shadow-sm">
+                    <button
+                      onClick={() => restoreTab(tab, originalIndex)}
+                      className="p-1.5 rounded hover:bg-accent"
+                      aria-label="Restore tab"
+                    >
+                      <ExternalLinkIcon className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => deleteArchivedTab(originalIndex)}
+                      className="p-1.5 rounded hover:bg-destructive hover:text-destructive-foreground"
+                      aria-label="Delete archived tab"
+                    >
+                      <Cross2Icon className="w-3 h-3" />
+                    </button>
+                  </div>
+                </motion.div>
             )
           })}
         </AnimatePresence>
@@ -202,8 +198,3 @@ function formatDate(timestamp: number): string {
   }
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 60000) return `${Math.round(ms / 1000)}s`
-  if (ms < 3600000) return `${Math.round(ms / 60000)}m`
-  return `${Math.round(ms / 3600000)}h`
-}

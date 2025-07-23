@@ -9,7 +9,8 @@ import {
   ChevronRightIcon,
   BookmarkIcon,
   BookmarkFilledIcon,
-  ReloadIcon
+  ReloadIcon,
+  ArchiveIcon
 } from '@radix-ui/react-icons'
 import { cn } from '@/utils/cn'
 import { storage } from '@/utils/storage'
@@ -301,6 +302,32 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
   async function togglePin(tab: chrome.tabs.Tab) {
     if (tab.id) {
       await chrome.tabs.update(tab.id, { pinned: !tab.pinned })
+      onUpdate()
+    }
+  }
+
+  async function archiveTab(tab: chrome.tabs.Tab) {
+    if (tab.id && tab.url) {
+      // Get existing archived tabs
+      const data = await chrome.storage.local.get('archivedTabs')
+      const archivedTabs = data.archivedTabs || []
+      
+      // Add new archived tab
+      const archivedTab = {
+        url: tab.url,
+        title: tab.title || 'Untitled',
+        favIconUrl: tab.favIconUrl,
+        archivedAt: Date.now(),
+        timeSpent: 0 // Could be enhanced with actual time tracking
+      }
+      
+      archivedTabs.unshift(archivedTab) // Add to beginning
+      
+      // Save to storage
+      await chrome.storage.local.set({ archivedTabs })
+      
+      // Close the tab
+      await chrome.tabs.remove(tab.id)
       onUpdate()
     }
   }
@@ -745,22 +772,22 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                       const animationDistance = tabIndex === 0 ? 0 : Math.min(5 + (tabIndex * 1.5), 10)
                       
                       return (
-                        <motion.div
-                          key={tab.id}
-                          layout
-                          initial={{ opacity: 0, x: -animationDistance }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: animationDistance }}
-                          transition={{ duration: animationDuration }}
-                          className={cn(
-                            'group flex items-center gap-2 p-2 rounded-md',
-                            'hover:bg-accent/50 cursor-pointer transition-colors',
-                            !group && 'glass glass-hover',
-                            selectedTabId === tab.id && 'ring-2 ring-primary bg-primary/10'
-                          )}
-                          style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 10%, transparent)` } : undefined}
-                          onClick={() => tab.id && activateTab(tab.id)}
-                        >
+                <motion.div
+                  key={tab.id}
+                  layout
+                  initial={{ opacity: 0, x: -animationDistance }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: animationDistance }}
+                  transition={{ duration: animationDuration }}
+                  className={cn(
+                    'group relative flex items-center gap-2 p-2 rounded-md',
+                    'hover:bg-accent/50 cursor-pointer transition-colors',
+                    !group && 'glass glass-hover',
+                    selectedTabId === tab.id && 'ring-2 ring-primary bg-primary/10'
+                  )}
+                  style={group ? { backgroundColor: `color-mix(in srgb, var(--color-${group.color}) 10%, transparent)` } : undefined}
+                  onClick={() => tab.id && activateTab(tab.id)}
+                >
                   {/* Favicon */}
                   <div className="w-4 h-4 flex-shrink-0">
                     {tab.favIconUrl ? (
@@ -789,8 +816,18 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                     )}
                   </div>
                   
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {/* Actions - overlay on the right */}
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background/90 backdrop-blur-sm rounded-md p-1 shadow-sm">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        archiveTab(tab)
+                      }}
+                      className="p-1 rounded hover:bg-accent"
+                      aria-label="Archive tab"
+                    >
+                      <ArchiveIcon className="w-3 h-3" />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
@@ -815,8 +852,7 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                       <Cross2Icon className="w-3 h-3" />
                     </button>
                   </div>
-                        </motion.div>
-                      )
+                </motion.div>                      )
                     })}
                   </div>
                 </motion.div>
