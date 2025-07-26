@@ -49,7 +49,15 @@ async function reconcileSavedGroups() {
     
     // Update saved workspaces that have matching active groups
     for (const workspace of workspaces) {
-      const activeGroup = activeGroups.find(g => g.title === workspace.name)
+      // Find matching active group by exact Chrome group ID
+      let activeGroup = null
+      
+      if (workspace.groups.length > 0) {
+        const groupId = parseInt(workspace.groups[0].id.replace('g_', ''))
+        if (!isNaN(groupId)) {
+          activeGroup = activeGroups.find(g => g.id === groupId)
+        }
+      }
       
       if (activeGroup) {
         // This saved group is now active, update it with current state
@@ -57,9 +65,11 @@ async function reconcileSavedGroups() {
         
         const updatedWorkspace: Workspace = {
           ...workspace,
+          name: activeGroup.title, // Update name to match current group title
           groups: [{
             ...workspace.groups[0],
             id: `g_${activeGroup.id}`,
+            name: activeGroup.title,
             color: activeGroup.color,
             collapsed: activeGroup.collapsed,
             tabs: tabs.map(t => t.id!),
@@ -69,8 +79,8 @@ async function reconcileSavedGroups() {
           updatedAt: Date.now()
         }
         
-        await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
-        console.log(`Updated saved group "${workspace.name}" with active group ID ${activeGroup.id}`)
+        await storage.saveWorkspace(updatedWorkspace)
+        console.log(`Updated saved group "${workspace.name}" to "${activeGroup.title}" with active group ID ${activeGroup.id}`)
       }
     }
   } catch (error) {
@@ -308,30 +318,44 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
 // Track group updates
 chrome.tabGroups.onUpdated.addListener(async (group) => {
   // Auto-save when a group is updated (renamed, color changed, etc.)
-  if (group.title) {
-    const tabs = await chrome.tabs.query({ groupId: group.id })
-    const workspaces = await storage.getWorkspaces()
-    const existingWorkspace = workspaces.find(ws => ws.name === group.title)
+  const tabs = await chrome.tabs.query({ groupId: group.id })
+  const workspaces = await storage.getWorkspaces()
+  
+  // Find workspace by Chrome group ID (exact match)
+  let existingWorkspace = null
+  let workspaceIndex = -1
+  
+  for (let i = 0; i < workspaces.length; i++) {
+    const workspace = workspaces[i]
+    // Look for exact Chrome group ID match
+    const matchingGroup = workspace.groups.find(g => g.id === `g_${group.id}`)
     
-    if (existingWorkspace && tabs.length > 0) {
-      // Update the existing saved workspace
-      const updatedWorkspace: Workspace = {
-        ...existingWorkspace,
-        groups: [{
-          ...existingWorkspace.groups[0],
-          id: `g_${group.id}`,
-          name: group.title,
-          color: group.color,
-          collapsed: group.collapsed,
-          tabs: tabs.map(t => t.id!),
-          updatedAt: Date.now()
-        }],
-        tabs: tabs.map(t => ({ ...t })),
-        updatedAt: Date.now()
-      }
-      
-      await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+    if (matchingGroup) {
+      existingWorkspace = workspace
+      workspaceIndex = i
+      break
     }
+  }
+  
+  if (existingWorkspace && tabs.length > 0) {
+    // Update the existing workspace with new name and data
+    const updatedWorkspace: Workspace = {
+      ...existingWorkspace,
+      name: group.title || 'Untitled Group',
+      groups: [{
+        ...existingWorkspace.groups[0],
+        id: `g_${group.id}`,
+        name: group.title || 'Untitled Group',
+        color: group.color,
+        collapsed: group.collapsed,
+        tabs: tabs.map(t => t.id!),
+        updatedAt: Date.now()
+      }],
+      tabs: tabs.map(t => ({ ...t })),
+      updatedAt: Date.now()
+    }
+    
+    await storage.saveWorkspace(updatedWorkspace)
   }
 })
 

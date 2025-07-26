@@ -153,35 +153,40 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
     setSavedGroupsData(workspaces)
     const savedMap = new Map<number, string>()
     
-    // Also check for active groups that match saved groups by name
-    const activeGroups = groups
+    // Map Chrome group IDs to workspace IDs
+    const newCollapsed = new Set<number>()
     
-    // Update collapsed state for saved groups that aren't active
-    setCollapsedGroups(prev => {
-      const newCollapsed = new Set(prev)
-      
-      workspaces.forEach(workspace => {
-        workspace.groups.forEach(group => {
-          // First, check if there's an active group with the same name
-          const activeGroup = activeGroups.find(g => g.title === group.name)
-          if (activeGroup) {
-            // Map the active group ID to this workspace
-            savedMap.set(activeGroup.id, workspace.id)
-          } else {
-            // Otherwise, use the saved group ID as before
-            const originalId = parseInt(group.id.replace('g_', ''))
-            if (!isNaN(originalId)) {
-              savedMap.set(originalId, workspace.id)
-              // Saved groups that aren't active should be collapsed
-              newCollapsed.add(originalId)
-            }
-          }
-        })
-      })
-      
-      return newCollapsed
+    // First, set collapsed state based on current Chrome groups
+    groups.forEach(group => {
+      if (group.collapsed) {
+        newCollapsed.add(group.id)
+      }
     })
     
+    // Map active groups to their saved workspaces
+    groups.forEach(group => {
+      const matchingWorkspace = workspaces.find(ws => 
+        ws.groups.some(g => g.id === `g_${group.id}`)
+      )
+      if (matchingWorkspace) {
+        savedMap.set(group.id, matchingWorkspace.id)
+      }
+    })
+    
+    // Map saved-only groups (not currently active) for potential restoration
+    // These should be collapsed by default
+    workspaces.forEach(workspace => {
+      workspace.groups.forEach(group => {
+        const chromeGroupId = parseInt(group.id.replace('g_', ''))
+        if (!isNaN(chromeGroupId) && !groups.find(g => g.id === chromeGroupId)) {
+          savedMap.set(chromeGroupId, workspace.id)
+          // Saved groups (inactive) should be collapsed by default
+          newCollapsed.add(chromeGroupId)
+        }
+      })
+    })
+    
+    setCollapsedGroups(newCollapsed)
     setSavedGroups(savedMap)
   }
   
@@ -189,31 +194,43 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
     // Don't auto-save on initial load
     if (groups.length === 0) return
     
-    // For each active group, check if there's a saved workspace with the same name
+    const workspaces = await storage.getWorkspaces()
+    
+    // For each active group, find matching workspace by Chrome group ID
     for (const group of groups) {
-      const workspaces = await storage.getWorkspaces()
-      const existingWorkspace = workspaces.find(ws => ws.name === group.title)
+      let existingWorkspace = null
+      
+      for (const workspace of workspaces) {
+        // Look for exact Chrome group ID match
+        const matchingGroup = workspace.groups.find(g => g.id === `g_${group.id}`)
+        
+        if (matchingGroup) {
+          existingWorkspace = workspace
+          break
+        }
+      }
       
       if (existingWorkspace) {
-        // Update the existing workspace with current tab state
+        // Update the existing workspace with current tab state and new name
         const tabs = await chrome.tabs.query({ currentWindow: true, groupId: group.id })
         
         const updatedWorkspace: Workspace = {
           ...existingWorkspace,
+          name: group.title || 'Untitled Group',
           groups: [{
+            ...existingWorkspace.groups[0],
             id: `g_${group.id}`,
             name: group.title || 'Untitled Group',
             color: group.color,
             collapsed: group.collapsed,
             tabs: tabs.map(t => t.id!),
-            createdAt: existingWorkspace.groups[0].createdAt,
             updatedAt: Date.now()
           }],
           tabs: tabs.map(t => ({ ...t })),
           updatedAt: Date.now()
         }
         
-        await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
+        await storage.saveWorkspace(updatedWorkspace)
       }
     }
     
@@ -511,34 +528,35 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                             collapsed: false
                           })
                           
-                          // Wait for all tabs to fully load
-                          const loadedTabs = await waitForTabsToLoad(tabIds.map(t => t.id!))
-                          
-                          // Update the workspace with the new group ID and loaded tab info
-                          const updatedWorkspace: Workspace = {
-                            ...savedWorkspace,
-                            groups: [{
-                              ...savedGroup,
-                              id: `g_${newGroupId}`,
-                              tabs: loadedTabs.map(t => t.id!),
-                              updatedAt: Date.now()
-                            }],
-                            tabs: loadedTabs,
-                            updatedAt: Date.now()
-                          }
-                          
-                          await storage.saveOrUpdateWorkspaceByName(updatedWorkspace)
-                          await loadSavedGroups()
-                          
-                          // Remove both the old saved group ID and new Chrome group ID from collapsed state
-                          setCollapsedGroups(prev => {
-                            const next = new Set(prev)
-                            next.delete(groupId) // Remove old saved group ID
-                            next.delete(newGroupId) // Remove new Chrome group ID
-                            return next
-                          })
-                          
-                          // Force Chrome to expand the group
+                         // Wait for all tabs to fully load
+                         const loadedTabs = await waitForTabsToLoad(tabIds.map(t => t.id!))
+                         
+                          // Update the existing workspace with the new group ID and loaded tab info
+                         const updatedWorkspace: Workspace = {
+                           ...savedWorkspace,
+                           id: savedWorkspace.id, // Ensure we preserve the workspace ID
+                           name: savedGroup.name, // Ensure we preserve the name
+                           groups: [{
+                             ...savedGroup,
+                             id: `g_${newGroupId}`,
+                             tabs: loadedTabs.map(t => t.id!),
+                             updatedAt: Date.now()
+                           }],
+                           tabs: loadedTabs,
+                           updatedAt: Date.now()
+                         }
+                         
+                         // Use saveWorkspace to update the existing workspace by ID
+                         await storage.saveWorkspace(updatedWorkspace)
+                         await loadSavedGroups()
+                         
+                         // Remove both the old saved group ID and new Chrome group ID from collapsed state
+                         setCollapsedGroups(prev => {
+                           const next = new Set(prev)
+                           next.delete(groupId) // Remove old saved group ID
+                           next.delete(newGroupId) // Remove new Chrome group ID
+                           return next
+                         })                          // Force Chrome to expand the group
                           await chrome.tabGroups.update(newGroupId, { collapsed: false })
                           
                           onUpdate()
