@@ -72,7 +72,7 @@ export const storage = {
 
   async getActiveWorkspace(): Promise<string | null> {
     const result = await chrome.storage.local.get(STORAGE_KEYS.ACTIVE_WORKSPACE)
-    return result[STORAGE_KEYS.ACTIVE_WORKSPACE] || null
+    return result[STORAGE_KEYS.ACTIVE_WORKSPACE] ?? null
   },
 
   async setActiveWorkspace(id: string | null): Promise<void> {
@@ -105,7 +105,7 @@ export const storage = {
 
   async getPreviousTabId(): Promise<number | null> {
     const result = await chrome.storage.local.get(STORAGE_KEYS.PREVIOUS_TAB_ID)
-    return result[STORAGE_KEYS.PREVIOUS_TAB_ID] || null
+    return result[STORAGE_KEYS.PREVIOUS_TAB_ID] ?? null
   },
 
   async setPreviousTabId(tabId: number | null): Promise<void> {
