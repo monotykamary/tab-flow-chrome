@@ -34,6 +34,7 @@ export interface TabRule {
   actions: RuleAction[];
   createdAt: number;
   updatedAt: number;
+  blockedReason?: string; // When present, rule cannot be toggled on
 }
 
 export interface RuleCondition {

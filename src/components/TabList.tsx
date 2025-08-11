@@ -391,6 +391,15 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
       const workspaceId = savedGroups.get(groupId)
       if (workspaceId) {
         await storage.deleteWorkspace(workspaceId)
+        // Also clear any blocked automations for this group's name
+        const rules = await storage.getTabRules()
+        const groupNameToMatch = groupName
+        for (const rule of rules) {
+          const targetsGroup = rule.actions.some(a => a.type === 'group' && a.value === groupNameToMatch)
+          if (targetsGroup && rule.blockedReason) {
+            await storage.saveTabRule({ ...rule, blockedReason: undefined, updatedAt: Date.now() })
+          }
+        }
       }
     } else {
       // Save the group
@@ -546,17 +555,29 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                            updatedAt: Date.now()
                          }
                          
-                         // Use saveWorkspace to update the existing workspace by ID
-                         await storage.saveWorkspace(updatedWorkspace)
-                         await loadSavedGroups()
-                         
-                         // Remove both the old saved group ID and new Chrome group ID from collapsed state
-                         setCollapsedGroups(prev => {
-                           const next = new Set(prev)
-                           next.delete(groupId) // Remove old saved group ID
-                           next.delete(newGroupId) // Remove new Chrome group ID
-                           return next
-                         })                          // Force Chrome to expand the group
+                          // Use saveWorkspace to update the existing workspace by ID
+                          await storage.saveWorkspace(updatedWorkspace)
+                          
+                          // Clear any blocked automations for this group's name and optionally re-enable
+                          const rules = await storage.getTabRules()
+                          const groupNameToMatch = savedGroup.name
+                          for (const rule of rules) {
+                            const targetsGroup = rule.actions.some(a => a.type === 'group' && a.value === groupNameToMatch)
+                            if (targetsGroup && rule.blockedReason) {
+                              await storage.saveTabRule({ ...rule, blockedReason: undefined, enabled: true, updatedAt: Date.now() })
+                            }
+                          }
+
+                          await loadSavedGroups()
+                          
+                          // Remove both the old saved group ID and new Chrome group ID from collapsed state
+                          setCollapsedGroups(prev => {
+                            const next = new Set(prev)
+                            next.delete(groupId) // Remove old saved group ID
+                            next.delete(newGroupId) // Remove new Chrome group ID
+                            return next
+                          })
+                          // Force Chrome to expand the group
                           await chrome.tabGroups.update(newGroupId, { collapsed: false })
                           
                           onUpdate()
@@ -756,6 +777,16 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
                     const tabIds = groupTabs.map(t => t.id).filter(Boolean) as number[]
                     if (tabIds.length > 0) {
                       await chrome.tabs.remove(tabIds)
+                      // Disable and block rules targeting this group name while saved-and-closed
+                      const groupName = group.title || 'Untitled Group'
+                      const rules = await storage.getTabRules()
+                      for (const rule of rules) {
+                        const targetsGroup = rule.actions.some(a => a.type === 'group' && a.value === groupName)
+                        if (targetsGroup) {
+                          await storage.saveTabRule({ ...rule, enabled: false, blockedReason: 'Automation paused: group is saved and closed', updatedAt: Date.now() })
+                        }
+                      }
+                      chrome.runtime.sendMessage({ action: 'rulesUpdated' })
                       onUpdate()
                     }
                   }}

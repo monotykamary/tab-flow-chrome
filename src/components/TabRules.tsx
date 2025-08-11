@@ -18,6 +18,13 @@ export function TabRules() {
 
   useEffect(() => {
     loadRules()
+    const handler = (message: any) => {
+      if (message?.action === 'rulesUpdated') {
+        loadRules()
+      }
+    }
+    chrome.runtime.onMessage.addListener(handler)
+    return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
 
   async function loadRules() {
@@ -40,6 +47,7 @@ export function TabRules() {
   }
 
   async function toggleRule(rule: TabRule) {
+    if (rule.blockedReason) return
     await storage.saveTabRule({ ...rule, enabled: !rule.enabled, updatedAt: Date.now() })
     await loadRules()
   }
@@ -191,7 +199,12 @@ function RuleDisplay({ rule, onEdit, onDelete, onToggle }: RuleDisplayProps) {
     <div className="space-y-3">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h4 className="font-medium">{rule.name}</h4>
+          <h4 className="font-medium flex items-center gap-2">
+            {rule.name}
+            {rule.blockedReason && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200">Blocked</span>
+            )}
+          </h4>
           <div className="mt-2 space-y-1">
             <p className="text-sm text-muted-foreground">
               <span className="font-medium">When:</span>{' '}
@@ -211,14 +224,20 @@ function RuleDisplay({ rule, onEdit, onDelete, onToggle }: RuleDisplayProps) {
                 </span>
               ))}
             </p>
+            {rule.blockedReason && (
+              <p className="text-xs text-amber-600 mt-1">{rule.blockedReason}</p>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={onToggle}
+            disabled={!!rule.blockedReason}
+            title={rule.blockedReason || undefined}
             className={cn(
               'relative inline-flex h-5 w-9 items-center rounded-full transition-colors',
-              rule.enabled ? 'bg-primary' : 'bg-input'
+              rule.enabled ? 'bg-primary' : 'bg-input',
+              rule.blockedReason && 'opacity-60 cursor-not-allowed'
             )}
           >
             <span
