@@ -120,6 +120,13 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
         setTimeout(() => setIsInitialLoad(false), 300)
       })
     })
+    const handler = (message: any) => {
+      if (message?.action === 'workspacesUpdated' || message?.action === 'rulesUpdated') {
+        loadSavedGroups()
+      }
+    }
+    chrome.runtime.onMessage.addListener(handler)
+    return () => chrome.runtime.onMessage.removeListener(handler)
   }, [])
   
   // Sync collapsed state when groups or saved groups change (skip on initial load)
@@ -165,9 +172,14 @@ export function TabList({ tabs, groups, searchQuery, onUpdate, selectedTabId }: 
     
     // Map active groups to their saved workspaces
     groups.forEach(group => {
-      const matchingWorkspace = workspaces.find(ws => 
+      // Prefer exact Chrome group ID match
+      let matchingWorkspace = workspaces.find(ws => 
         ws.groups.some(g => g.id === `g_${group.id}`)
       )
+      // Fallback: match by name when IDs aren't aligned yet
+      if (!matchingWorkspace) {
+        matchingWorkspace = workspaces.find(ws => ws.name === (group.title || 'Untitled Group'))
+      }
       if (matchingWorkspace) {
         savedMap.set(group.id, matchingWorkspace.id)
       }

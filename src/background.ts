@@ -41,6 +41,29 @@ async function initializeExtension() {
 
 // Reconcile saved groups with active Chrome groups
 async function reconcileSavedGroups() {
+  const ensureRuleBlockStateForGroup = async (groupName: string, isOpen: boolean) => {
+    const rules = await storage.getTabRules()
+    let mutated = false
+    for (const rule of rules) {
+      const targetsGroup = rule.actions.some(a => a.type === 'group' && a.value === groupName)
+      if (!targetsGroup) continue
+      if (isOpen) {
+        if (rule.blockedReason) {
+          await storage.saveTabRule({ ...rule, blockedReason: undefined, enabled: true, updatedAt: Date.now() })
+          mutated = true
+        }
+      } else {
+        if (!rule.blockedReason || rule.enabled) {
+          await storage.saveTabRule({ ...rule, enabled: false, blockedReason: 'Automation paused: group is saved and closed', updatedAt: Date.now() })
+          mutated = true
+        }
+      }
+    }
+    if (mutated) {
+      chrome.runtime.sendMessage({ action: 'rulesUpdated' })
+    }
+  }
+
   try {
     const [activeGroups, workspaces] = await Promise.all([
       chrome.tabGroups.query({}),
@@ -80,7 +103,35 @@ async function reconcileSavedGroups() {
         }
         
         await storage.saveWorkspace(updatedWorkspace)
+        // Since this group is open, ensure rules are unblocked for this name
+        if (activeGroup.title) {
+          await ensureRuleBlockStateForGroup(activeGroup.title, true)
+        }
         console.log(`Updated saved group "${workspace.name}" to "${activeGroup.title}" with active group ID ${activeGroup.id}`)
+      } else {
+        // No active group found by ID; if names match an active group, link and unblock
+        const byName = activeGroups.find(g => g.title && g.title === workspace.name)
+        if (byName) {
+          const tabs = await chrome.tabs.query({ groupId: byName.id })
+          const updatedWorkspace: Workspace = {
+            ...workspace,
+            name: byName.title,
+            groups: [{
+              ...workspace.groups[0],
+              id: `g_${byName.id}`,
+              name: byName.title!,
+              color: byName.color,
+              collapsed: byName.collapsed,
+              tabs: tabs.map(t => t.id!),
+              updatedAt: Date.now()
+            }],
+            tabs: tabs.map(t => ({ ...t })),
+            updatedAt: Date.now()
+          }
+        await storage.saveWorkspace(updatedWorkspace)
+        chrome.runtime.sendMessage({ action: 'workspacesUpdated' })
+          await ensureRuleBlockStateForGroup(byName.title!, true)
+        }
       }
     }
   } catch (error) {
@@ -356,6 +407,34 @@ chrome.tabGroups.onUpdated.addListener(async (group) => {
     }
     
     await storage.saveWorkspace(updatedWorkspace)
+    // Also ensure rules are unblocked for this group's name
+    if (group.title) {
+      const rules = await storage.getTabRules()
+      let changed = false
+      for (const rule of rules) {
+        const targets = rule.actions.some(a => a.type === 'group' && a.value === group.title)
+        if (targets && rule.blockedReason) {
+          await storage.saveTabRule({ ...rule, blockedReason: undefined, enabled: true, updatedAt: Date.now() })
+          changed = true
+        }
+      }
+      if (changed) chrome.runtime.sendMessage({ action: 'rulesUpdated' })
+    }
+  }
+
+  if (group.title) {
+    // Group is present/open -> unblocking state
+    // Clear blockedReason for rules targeting this group name
+    const rules = await storage.getTabRules()
+    let changed = false
+    for (const rule of rules) {
+      const targets = rule.actions.some(a => a.type === 'group' && a.value === group.title)
+      if (targets && rule.blockedReason) {
+        await storage.saveTabRule({ ...rule, blockedReason: undefined, enabled: true, updatedAt: Date.now() })
+        changed = true
+      }
+    }
+    if (changed) chrome.runtime.sendMessage({ action: 'rulesUpdated' })
   }
 })
 
@@ -465,7 +544,8 @@ async function archiveTab(tab: chrome.tabs.Tab) {
 // Apply rules to a tab
 async function applyRules(tab: chrome.tabs.Tab) {
   const rules = await storage.getTabRules()
-  const enabledRules = rules.filter(r => r.enabled)
+  // Only apply rules that are enabled and not blocked
+  const enabledRules = rules.filter(r => r.enabled && !r.blockedReason)
 
   for (const rule of enabledRules) {
     if (await matchesConditions(tab, rule.conditions, rule.conditionOperator)) {
