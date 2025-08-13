@@ -360,10 +360,40 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 })
 
 // Track tab removal
+let debounceTabsRemovedTimer: NodeJS.Timeout | null = null
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   tabLastAccessed.delete(tabId)
   tabTimeSpent.delete(tabId)
   await updateDailyStats('closed')
+  // Debounce a reconciliation to catch group closures done directly in Chrome
+  if (debounceTabsRemovedTimer) clearTimeout(debounceTabsRemovedTimer)
+  debounceTabsRemovedTimer = setTimeout(async () => {
+    try {
+      const [activeGroups, workspaces] = await Promise.all([
+        chrome.tabGroups.query({}),
+        storage.getWorkspaces()
+      ])
+      const activeGroupIds = new Set(activeGroups.map(g => g.id))
+      // For any saved workspace whose chrome group id no longer exists, mark rules blocked
+      for (const ws of workspaces) {
+        if (ws.groups.length === 0) continue
+        const gid = parseInt(ws.groups[0].id.replace('g_', ''))
+        if (!isNaN(gid) && !activeGroupIds.has(gid)) {
+          // Group is not active -> treat as saved-and-closed; block rules targeting its name
+          const rules = await storage.getTabRules()
+          let changed = false
+          for (const rule of rules) {
+            const targets = rule.actions.some(a => a.type === 'group' && a.value === ws.name)
+            if (targets && (!rule.blockedReason || rule.enabled)) {
+              await storage.saveTabRule({ ...rule, enabled: false, blockedReason: 'Automation paused: group is saved and closed', updatedAt: Date.now() })
+              changed = true
+            }
+          }
+          if (changed) chrome.runtime.sendMessage({ action: 'rulesUpdated' })
+        }
+      }
+    } catch {}
+  }, 250)
 })
 
 // Track group updates
