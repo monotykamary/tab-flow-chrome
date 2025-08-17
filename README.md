@@ -92,16 +92,20 @@ Install directly from the Chrome Web Store:
 ```bash
 git clone https://github.com/monotykamary/tab-flow-chrome.git
 cd tab-flow-chrome
+
+# Ensure Bun is installed
+# macOS/Linux: curl -fsSL https://bun.sh/install | bash
+# Windows (PowerShell): powershell -c "irm bun.sh/install.ps1 | iex"
 ```
 
-2. Install dependencies:
+2. Install dependencies (Bun):
 ```bash
-npm install
+bun install
 ```
 
 3. Build the extension:
 ```bash
-npm run build
+bun run build
 ```
 
 4. Load in Chrome:
@@ -114,12 +118,12 @@ npm run build
 
 Start the development server with hot reload:
 ```bash
-npm run dev
+bun run dev
 ```
 
 Build for production:
 ```bash
-npm run build
+bun run build
 ```
 
 ## ⌨️ Keyboard Shortcuts
