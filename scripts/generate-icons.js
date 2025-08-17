@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 const sizes = [16, 32, 48, 128];
 
 // Paths
-const pngPath = path.join(__dirname, '../public/icons/icon.png');
+const pngPath = path.join(__dirname, '../public/icons/icon-trimmed.png');
 const iconsDir = path.join(__dirname, '../public/icons');
 
 // Check if PNG exists
