@@ -128,6 +128,21 @@ export function OptionsApp() {
             </div>
           </Section>
 
+          {/* Keyboard Shortcuts */}
+          <Section title="Keyboard Shortcuts" icon={MixerHorizontalIcon}>
+            <div className="space-y-4">
+              <Switch
+                label="Copy current tab URL (Ctrl/Cmd+Shift+C)"
+                description="Enable the shortcut to copy the active tab's URL"
+                checked={settings.copyUrlShortcutEnabled}
+                onChange={(checked) => updateSetting('copyUrlShortcutEnabled', checked)}
+              />
+              <p className="text-xs text-muted-foreground">
+                You can customize this in chrome://extensions/shortcuts
+              </p>
+            </div>
+          </Section>
+
           {/* Auto-Archive */}
           <Section title="Auto-Archive" icon={ArchiveIcon}>
             <div className="space-y-4">

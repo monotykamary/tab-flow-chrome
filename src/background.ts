@@ -1,5 +1,5 @@
 import { storage } from './utils/storage'
-import type { TabRule, RuleCondition, RuleAction, Workspace, Settings } from './types'
+import type { RuleCondition, RuleAction, Workspace, Settings } from './types'
 
 // Tab tracking
 const tabLastAccessed = new Map<number, number>()
@@ -867,5 +867,91 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 })
 
+// Ensure an offscreen document exists for clipboard access
+async function ensureOffscreenDocument() {
+  try {
+    // @ts-ignore Experimental API type
+    if (chrome.offscreen && (await (chrome.offscreen as any).hasDocument?.())) return
+  } catch {}
+  try {
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['CLIPBOARD'] as any,
+      justification: 'Write text to clipboard on keyboard shortcut',
+    })
+  } catch (e) {
+    // Ignore if already exists or not supported
+  }
+}
+
+async function copyTextViaOffscreen(text: string): Promise<boolean> {
+  try {
+    await ensureOffscreenDocument()
+    const res = await chrome.runtime.sendMessage({ type: 'copy-to-clipboard', text })
+    return !!(res && res.ok)
+  } catch {
+    return false
+  }
+}
+
+async function showToast(tabId: number, message: string) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (msg: string) => {
+        try {
+          const container = document.createElement('div')
+          container.textContent = msg
+          Object.assign(container.style, {
+            position: 'fixed',
+            top: '24px',
+            left: '50%',
+            transform: 'translateX(-50%) translateY(-8px)',
+            background: 'rgba(17, 17, 17, 0.92)',
+            color: '#fff',
+            padding: '10px 14px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            zIndex: '2147483647',
+            boxShadow: '0 10px 15px -3px rgba(0,0,0,0.3), 0 4px 6px -2px rgba(0,0,0,0.25)',
+            opacity: '0',
+            transition: 'opacity 120ms ease, transform 120ms ease',
+            pointerEvents: 'none',
+          } as Partial<CSSStyleDeclaration>)
+          document.documentElement.appendChild(container)
+          requestAnimationFrame(() => {
+            container.style.opacity = '1'
+            container.style.transform = 'translateX(-50%) translateY(0)'
+          })
+          setTimeout(() => {
+            container.style.opacity = '0'
+            container.style.transform = 'translateX(-50%) translateY(-8px)'
+            setTimeout(() => container.remove(), 180)
+          }, 1400)
+        } catch {}
+      },
+      args: [message],
+    })
+  } catch {}
+}
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command !== 'copy_tab_url') return
+  try {
+    const settings = await getCachedSettings()
+    if (!settings.copyUrlShortcutEnabled) return
+
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    const url = tab?.url || ''
+    if (!url) return
+
+    const copied = await copyTextViaOffscreen(url)
+    if (tab?.id) {
+      await showToast(tab.id, copied ? 'URL copied to clipboard' : 'Failed to copy URL')
+    }
+  } catch (e) {
+    console.error('Failed to handle copy_tab_url command:', e)
+  }
+})
 
 export {}

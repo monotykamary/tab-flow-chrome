@@ -7,7 +7,10 @@
     "tabs",
     "tabGroups",
     "storage",
-    "alarms"
+    "alarms",
+    "scripting",
+    "offscreen",
+    "clipboardWrite"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -35,10 +38,17 @@
   "commands": {
     "_execute_action": {
       "suggested_key": {
-        "default": "Ctrl+Shift+A",
-        "mac": "Command+Shift+A"
+        "default": "Ctrl+Shift+S",
+        "mac": "Command+Shift+S"
       },
       "description": "Open Tab Flow and focus search"
+    },
+    "copy_tab_url": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+C",
+        "mac": "Command+Shift+C"
+      },
+      "description": "Copy current tab URL"
     }
   },
   "content_security_policy": {

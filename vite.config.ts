@@ -16,6 +16,7 @@ export default defineConfig({
       input: {
         popup: resolve(__dirname, 'popup.html'),
         options: resolve(__dirname, 'options.html'),
+        offscreen: resolve(__dirname, 'offscreen.html'),
       },
       output: {
         entryFileNames: '[name].js',

@@ -74,4 +74,5 @@ export interface Settings {
   accentColor: 'blue' | 'purple' | 'green' | 'orange' | 'pink' | 'red';
   autoCollapseGroups: boolean;
   autoCollapseDelay: number;
+  copyUrlShortcutEnabled: boolean; // Enable Ctrl/Cmd+Shift+C to copy current URL
 }

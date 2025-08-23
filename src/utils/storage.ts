@@ -129,5 +129,6 @@ function getDefaultSettings(): Settings {
     accentColor: 'blue',
     autoCollapseGroups: false,
     autoCollapseDelay: 5,
+    copyUrlShortcutEnabled: true,
   }
 }
