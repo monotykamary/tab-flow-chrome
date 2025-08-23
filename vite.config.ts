@@ -24,7 +24,7 @@ export default defineConfig({
         assetFileNames: '[name].[ext]',
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],
-          'framer-motion': ['framer-motion'],
+          'motion': ['motion'],
           'radix-ui': ['@radix-ui/react-icons'],
           'charts': ['recharts'],
         },

@@ -6,7 +6,7 @@ import {
   BookmarkIcon,
   CopyIcon
 } from '@radix-ui/react-icons'
-import { motion } from 'framer-motion'
+import { motion } from 'motion/react'
 import { cn } from '@/utils/cn'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
